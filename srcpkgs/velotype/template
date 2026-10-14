@@ -6,7 +6,7 @@ _commit=a61c71955c6104fc5d647088b5957da6d59149ca
 wrksrc="${pkgname}-${_commit}"
 build_style=cargo
 make_check=no
-hostmakedepends="pkg-config cmake clang patch python3 wayland-devel wayland-protocols"
+hostmakedepends="pkg-config cmake clang wayland-protocols"
 makedepends="fontconfig-devel freetype-devel openssl-devel
  libX11-devel libxcb-devel libXrandr-devel libXi-devel
  libXcursor-devel libXdamage-devel libXfixes-devel libXrender-devel
@@ -26,14 +26,13 @@ case "$XBPS_TARGET_MACHINE" in
 	*) broken="only supported on x86_64-musl / Intel Skylake" ;;
 esac
 
-# xattr 0.2.3 references libc::ENOATTR on Linux. musl correctly exposes
-# ENODATA instead. Patch the fetched registry copy only for this build, update
-# Cargo's per-file digest, and always restore the shared cache afterward.
+# xattr 0.2.3 references libc::ENOATTR on Linux, unavailable on musl.
+# Patch only the fetched registry source for this build, then restore it so
+# the shared Cargo cache remains unmodified.
 _velotype_restore_xattr_patch() {
 	if [ -n "${_velotype_xattr_src:-}" ] && [ -n "${_velotype_xattr_backup:-}" ]; then
 		if [ -f "${_velotype_xattr_backup}/mod.rs" ]; then
 			cp -f "${_velotype_xattr_backup}/mod.rs" "${_velotype_xattr_src}/src/sys/mod.rs"
-			cp -f "${_velotype_xattr_backup}/.cargo-checksum.json" "${_velotype_xattr_src}/.cargo-checksum.json"
 		fi
 		rm -rf -- "${_velotype_xattr_backup}"
 	fi
@@ -49,14 +48,13 @@ do_build() {
 	export CFLAGS="${CFLAGS:-} -O2 -march=skylake"
 	export CXXFLAGS="${CXXFLAGS:-} -O2 -march=skylake"
 	export RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=skylake"
-	# Avoid memory pressure when building the large GPUI dependency graph on
-	# the target's 2-core CPU; callers may explicitly override this.
+	# Avoid memory pressure on the target's 2-core CPU; callers may override.
 	export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 
 	_velotype_xattr_src=
 	_velotype_xattr_backup=
 	if [ "$XBPS_TARGET_LIBC" = "musl" ]; then
-		# Fetch first so we can patch a verified, unpacked Cargo registry crate.
+		# Download/unpack dependencies before editing the registry source.
 		cargo fetch --locked --target "$RUST_TARGET"
 
 		cargo_home="${CARGO_HOME:-/host/cargo}"
@@ -70,27 +68,9 @@ do_build() {
 		if grep -Fq '::libc::ENOATTR' "$_velotype_xattr_src/src/sys/mod.rs"; then
 			_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
 			cp -f "$_velotype_xattr_src/src/sys/mod.rs" "$_velotype_xattr_backup/mod.rs"
-			cp -f "$_velotype_xattr_src/.cargo-checksum.json" "$_velotype_xattr_backup/.cargo-checksum.json"
 			trap _velotype_restore_xattr_patch EXIT
 			patch --silent --directory "$_velotype_xattr_src" --strip=1 \
 				--forward < "${FILESDIR}/xattr-musl.patch"
-
-			python3 - "$_velotype_xattr_src" <<'PY'
-import hashlib
-import json
-import pathlib
-import sys
-
-root = pathlib.Path(sys.argv[1])
-source = root / "src/sys/mod.rs"
-manifest = root / ".cargo-checksum.json"
-data = json.loads(manifest.read_text())
-key = "src/sys/mod.rs"
-if key not in data.get("files", {}):
-    raise SystemExit(f"missing {key} in Cargo checksum manifest: {manifest}")
-data["files"][key] = hashlib.sha256(source.read_bytes()).hexdigest()
-manifest.write_text(json.dumps(data, separators=(",", ":")) + "\n")
-PY
 		elif ! grep -Fq '::libc::ENODATA' "$_velotype_xattr_src/src/sys/mod.rs"; then
 			echo "velotype: xattr-0.2.3 source does not match the expected musl patch context" >&2
 			return 1

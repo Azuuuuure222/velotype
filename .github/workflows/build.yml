@@ -89,9 +89,10 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: void-packages/hostdir/repocache-${{ env.XBPS_TARGET_ARCH }}
-          key: void-repocache-v1-${{ env.XBPS_TARGET_ARCH }}-${{ hashFiles('void-packages/xbps-src', 'void-packages/srcpkgs/base-chroot/template') }}
+          # v2 invalidates the early, incomplete cache saved by the first workflow.
+          key: void-repocache-v2-${{ env.XBPS_TARGET_ARCH }}-${{ hashFiles('void-packages/xbps-src', 'void-packages/srcpkgs/base-chroot/template') }}
           restore-keys: |
-            void-repocache-v1-${{ env.XBPS_TARGET_ARCH }}-
+            void-repocache-v2-${{ env.XBPS_TARGET_ARCH }}-
 
       - name: Verify source checksum and overlay package
         run: |
@@ -127,13 +128,6 @@ jobs:
           printf '%s\n' 'XBPS_MAKEJOBS=2' >> etc/conf
           ./xbps-src -A "$XBPS_TARGET_ARCH" binary-bootstrap
 
-      - name: Save Void binary package cache
-        if: steps.xbps-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: void-packages/hostdir/repocache-${{ env.XBPS_TARGET_ARCH }}
-          key: void-repocache-v1-${{ env.XBPS_TARGET_ARCH }}-${{ hashFiles('void-packages/xbps-src', 'void-packages/srcpkgs/base-chroot/template') }}
-
       - name: Build package
         working-directory: void-packages
         run: |
@@ -164,3 +158,10 @@ jobs:
         with:
           path: void-packages/hostdir/cargo/registry
           key: velotype-cargo-v1-${{ steps.source.outputs.commit }}
+
+      - name: Save Void binary package cache
+        if: always() && steps.xbps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: void-packages/hostdir/repocache-${{ env.XBPS_TARGET_ARCH }}
+          key: void-repocache-v2-${{ env.XBPS_TARGET_ARCH }}-${{ hashFiles('void-packages/xbps-src', 'void-packages/srcpkgs/base-chroot/template') }}

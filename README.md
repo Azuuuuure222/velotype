@@ -27,10 +27,10 @@ The generated package is placed under `void-packages/hostdir/binpkgs/`.
 
 ## musl compatibility
 
-Upstream's transitive `xattr 0.2.3` currently references `libc::ENOATTR`, which is unavailable on musl Linux. The package template patches this to `libc::ENODATA` only after Cargo fetches the pinned dependency. It updates Cargo's per-file digest while compiling, then restores the shared Cargo cache on success or failure.
+Upstream's transitive `xattr 0.2.3` references `libc::ENOATTR`, which is unavailable on musl Linux. The package template patches this to `libc::ENODATA` only after Cargo fetches the pinned dependency, then restores the shared Cargo registry source on success or failure.
 
 ## CI and reproducibility
 
-GitHub Actions builds the actual `.xbps` package through `xbps-src`, and uploads it as a workflow artifact. The CI workflow caches the pinned source archive, Cargo registry and Void binary packages. Source archives are always validated against the committed SHA-256; the expected checksum is never silently regenerated.
+GitHub Actions builds the actual `.xbps` package through `xbps-src`, and uploads it as a workflow artifact. CI caches the pinned source archive, Cargo registry and Void binary packages. Source archives are always validated against the committed SHA-256; the expected checksum is never silently regenerated. The package cache is saved after the build attempt, including failures, so it retains the actual dependency downloads.
 
 When updating Velotype, review the upstream source commit and archive checksum, then build with `./xbps-src -A x86_64-musl pkg velotype` before merging.
