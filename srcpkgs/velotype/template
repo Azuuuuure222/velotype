@@ -11,8 +11,8 @@ hostmakedepends="pkg-config cmake clang wayland-devel wayland-protocols"
 makedepends="fontconfig-devel freetype-devel openssl-devel
  libX11-devel libxcb-devel libXrandr-devel libXi-devel
  libXcursor-devel libXdamage-devel libXfixes-devel libXrender-devel
- libXext-devel libxkbcommon-devel wayland-devel mesa-devel
- vulkan-loader-devel"
+ libXext-devel libxkbcommon-devel wayland-devel
+ MesaLib-devel libglvnd-devel vulkan-loader-devel"
 archs="x86_64-musl"
 short_desc="Native Markdown editor built with Rust and GPUI"
 maintainer="Azuuuuure222"
