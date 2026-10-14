@@ -1,0 +1,33 @@
+# Template file for 'velotype'
+pkgname=velotype
+version=0.7.5
+revision=1
+_commit=a61c71955c6104fc5d647088b5957da6d59149ca
+wrksrc="${pkgname}-${_commit}"
+build_style=cargo
+# UI tests may need a graphical session; CI builds this package headlessly.
+make_check=no
+hostmakedepends="pkg-config cmake clang wayland-devel wayland-protocols"
+makedepends="fontconfig-devel freetype-devel openssl-devel
+ libX11-devel libxcb-devel libXrandr-devel libXi-devel
+ libXcursor-devel libXdamage-devel libXfixes-devel libXrender-devel
+ libXext-devel libxkbcommon-devel wayland-devel mesa-devel
+ vulkan-loader-devel"
+archs="x86_64-musl"
+short_desc="Native Markdown editor built with Rust and GPUI"
+maintainer="Azuuuuure222"
+license="Apache-2.0"
+homepage="https://github.com/manyougz/velotype"
+distfiles="${homepage}/archive/${_commit}.tar.gz"
+# Run scripts/prepare-source.sh to replace this placeholder with the archive SHA-256.
+checksum=SKIP
+
+post_install() {
+	vlicense LICENSE-APACHE
+	vdoc README.md
+	vinstall resources/linux/com.manyougz.Velotype.desktop 644 usr/share/applications
+	vinstall resources/linux/icons/hicolor/256x256/apps/com.manyougz.Velotype.png 644 \
+		usr/share/icons/hicolor/256x256/apps
+	vinstall resources/linux/icons/hicolor/512x512/apps/com.manyougz.Velotype.png 644 \
+		usr/share/icons/hicolor/512x512/apps
+}

@@ -1,0 +1,106 @@
+name: Build Velotype for Void musl
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "srcpkgs/velotype/**"
+      - "scripts/**"
+      - ".github/workflows/build.yml"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: velotype-musl-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XBPS_TARGET_ARCH: x86_64-musl
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Free runner disk space
+        run: |
+          set -euo pipefail
+          sudo rm -rf -- \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/local/share/boost \
+            /usr/local/share/powershell \
+            /usr/local/lib/node_modules
+          df -h /
+
+      - name: Checkout package repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Checkout void-packages
+        uses: actions/checkout@v6
+        with:
+          repository: void-linux/void-packages
+          ref: master
+          path: void-packages
+          persist-credentials: false
+
+      - name: Resolve source checksum and overlay template
+        run: |
+          set -euo pipefail
+          ./scripts/prepare-source.sh
+          bash -n srcpkgs/velotype/template
+          echo "PACKAGE_VERSION=$(sed -n 's/^version=//p' srcpkgs/velotype/template)" >> "$GITHUB_ENV"
+          cp -a srcpkgs/velotype void-packages/srcpkgs/velotype
+
+      - name: Install static xbps
+        run: |
+          set -euo pipefail
+          mkdir -p /opt/xbps
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 30 --max-time 300 \
+            --output /tmp/xbps-static.tar.xz \
+            https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
+          tar -xJf /tmp/xbps-static.tar.xz -C /opt/xbps
+          rm -f /tmp/xbps-static.tar.xz
+          echo "/opt/xbps/usr/bin" >> "$GITHUB_PATH"
+
+      - name: Bootstrap xbps-src for musl
+        working-directory: void-packages
+        run: |
+          set -euo pipefail
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          printf '%s\n' 'XBPS_MAKEJOBS=2' >> etc/conf
+          ./xbps-src -A "$XBPS_TARGET_ARCH" binary-bootstrap
+
+      - name: Build package
+        working-directory: void-packages
+        run: |
+          set -euo pipefail
+          ./xbps-src -A "$XBPS_TARGET_ARCH" pkg velotype
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          mapfile -t packages < <(
+            find hostdir/binpkgs -type f -name "velotype-${PACKAGE_VERSION}_*.xbps" -print
+          )
+          if [ "${#packages[@]}" -ne 1 ]; then
+            printf 'Expected one Velotype package, found %s\n' "${#packages[@]}" >&2
+            find hostdir/binpkgs -type f -name '*velotype*.xbps' -print >&2
+            exit 1
+          fi
+          cp "${packages[0]}" "$GITHUB_WORKSPACE/dist/"
+          sha256sum "$GITHUB_WORKSPACE"/dist/*.xbps
+
+      - name: Upload xbps package
+        uses: actions/upload-artifact@v7
+        with:
+          name: velotype-x86_64-musl
+          path: dist/*.xbps
+          if-no-files-found: error
