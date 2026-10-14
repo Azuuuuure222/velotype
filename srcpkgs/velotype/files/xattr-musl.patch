@@ -1,0 +1,5 @@
+--- a/src/sys/mod.rs
++++ b/src/sys/mod.rs
+@@ -12 +12 @@
+-                pub const ENOATTR: ::libc::c_int = ::libc::ENOATTR;
++                pub const ENOATTR: ::libc::c_int = ::libc::ENODATA;

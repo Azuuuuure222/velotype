@@ -5,21 +5,109 @@ revision=1
 _commit=a61c71955c6104fc5d647088b5957da6d59149ca
 wrksrc="${pkgname}-${_commit}"
 build_style=cargo
-# UI tests may need a graphical session; CI builds this package headlessly.
 make_check=no
-hostmakedepends="pkg-config cmake clang wayland-devel wayland-protocols"
+hostmakedepends="pkg-config cmake clang patch python3 wayland-devel wayland-protocols"
 makedepends="fontconfig-devel freetype-devel openssl-devel
  libX11-devel libxcb-devel libXrandr-devel libXi-devel
  libXcursor-devel libXdamage-devel libXfixes-devel libXrender-devel
  libXext-devel libxkbcommon-devel wayland-devel
  MesaLib-devel libglvnd-devel vulkan-loader-devel"
-archs="x86_64-musl"
 short_desc="Native Markdown editor built with Rust and GPUI"
 maintainer="Azuuuuure222"
 license="Apache-2.0"
 homepage="https://github.com/manyougz/velotype"
 distfiles="${homepage}/archive/${_commit}.tar.gz"
 checksum=a65a9f6dfc6697650b8368e9be925a8f218cfb52e1246d32f9a95f1de5a2f84a
+
+# Tuned specifically for the target Intel Core i3-6100U (Skylake).
+# Do not distribute this binary to pre-Skylake x86_64 systems.
+case "$XBPS_TARGET_MACHINE" in
+	x86_64-musl) ;;
+	*) broken="only supported on x86_64-musl / Intel Skylake" ;;
+esac
+
+# xattr 0.2.3 references libc::ENOATTR on Linux. musl correctly exposes
+# ENODATA instead. Patch the fetched registry copy only for this build, update
+# Cargo's per-file digest, and always restore the shared cache afterward.
+_velotype_restore_xattr_patch() {
+	if [ -n "${_velotype_xattr_src:-}" ] && [ -n "${_velotype_xattr_backup:-}" ]; then
+		if [ -f "${_velotype_xattr_backup}/mod.rs" ]; then
+			cp -f "${_velotype_xattr_backup}/mod.rs" "${_velotype_xattr_src}/src/sys/mod.rs"
+			cp -f "${_velotype_xattr_backup}/.cargo-checksum.json" "${_velotype_xattr_src}/.cargo-checksum.json"
+		fi
+		rm -rf -- "${_velotype_xattr_backup}"
+	fi
+	_velotype_xattr_src=
+	_velotype_xattr_backup=
+}
+
+do_build() {
+	: ${make_cmd:=cargo auditable}
+	: ${make_verbose:=-v}
+
+	# Target-specific optimization; preserve flags supplied by xbps-src.
+	export CFLAGS="${CFLAGS:-} -O2 -march=skylake"
+	export CXXFLAGS="${CXXFLAGS:-} -O2 -march=skylake"
+	export RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=skylake"
+	# Avoid memory pressure when building the large GPUI dependency graph on
+	# the target's 2-core CPU; callers may explicitly override this.
+	export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
+
+	_velotype_xattr_src=
+	_velotype_xattr_backup=
+	if [ "$XBPS_TARGET_LIBC" = "musl" ]; then
+		# Fetch first so we can patch a verified, unpacked Cargo registry crate.
+		cargo fetch --locked --target "$RUST_TARGET"
+
+		cargo_home="${CARGO_HOME:-/host/cargo}"
+		_velotype_xattr_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
+			-type d -name 'xattr-0.2.3' -print -quit)"
+		if [ -z "$_velotype_xattr_src" ]; then
+			echo "velotype: expected fetched xattr-0.2.3 source under $cargo_home/registry/src" >&2
+			return 1
+		fi
+
+		if grep -Fq '::libc::ENOATTR' "$_velotype_xattr_src/src/sys/mod.rs"; then
+			_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
+			cp -f "$_velotype_xattr_src/src/sys/mod.rs" "$_velotype_xattr_backup/mod.rs"
+			cp -f "$_velotype_xattr_src/.cargo-checksum.json" "$_velotype_xattr_backup/.cargo-checksum.json"
+			trap _velotype_restore_xattr_patch EXIT
+			patch --silent --directory "$_velotype_xattr_src" --strip=1 \
+				--forward < "${FILESDIR}/xattr-musl.patch"
+
+			python3 - "$_velotype_xattr_src" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+source = root / "src/sys/mod.rs"
+manifest = root / ".cargo-checksum.json"
+data = json.loads(manifest.read_text())
+key = "src/sys/mod.rs"
+if key not in data.get("files", {}):
+    raise SystemExit(f"missing {key} in Cargo checksum manifest: {manifest}")
+data["files"][key] = hashlib.sha256(source.read_bytes()).hexdigest()
+manifest.write_text(json.dumps(data, separators=(",", ":")) + "\n")
+PY
+		elif ! grep -Fq '::libc::ENODATA' "$_velotype_xattr_src/src/sys/mod.rs"; then
+			echo "velotype: xattr-0.2.3 source does not match the expected musl patch context" >&2
+			return 1
+		fi
+	fi
+
+	if ${make_cmd} build ${XBPS_VERBOSE+${make_verbose}} --release --locked --target "${RUST_TARGET}" \
+		${configure_args} ${make_build_args}; then
+		_velotype_restore_xattr_patch
+		trap - EXIT
+	else
+		build_status=$?
+		_velotype_restore_xattr_patch
+		trap - EXIT
+		return "$build_status"
+	fi
+}
 
 post_install() {
 	vlicense LICENSE-APACHE

@@ -1,8 +1,12 @@
 # velotype-musl
 
-Void Linux `x86_64-musl` package for [Velotype](https://github.com/manyougz/velotype), a native Markdown editor built with Rust and GPUI.
+Void Linux `x86_64-musl` package for [Velotype](https://github.com/manyougz/velotype), a native Rust/GPUI Markdown editor.
 
-The package builds from source through `xbps-src`; it does not reuse upstream Linux binaries. The template pins Velotype `0.7.5` to upstream commit `a61c71955c6104fc5d647088b5957da6d59149ca` and verifies a committed SHA-256 before using the source archive.
+This package pins Velotype `0.7.5` to upstream commit `a61c71955c6104fc5d647088b5957da6d59149ca`, and verifies the committed SHA-256 before building.
+
+## Target hardware
+
+The binary is optimized specifically for the Intel Core i3-6100U (Skylake): C/C++ components use `-O2 -march=skylake`, and Rust uses `-C target-cpu=skylake`. It is not intended for pre-Skylake x86_64 CPUs. Cargo builds default to two parallel jobs to limit build-time memory pressure.
 
 ## Build locally
 
@@ -11,7 +15,6 @@ git clone https://github.com/Azuuuuure222/velotype-musl.git
 git clone https://github.com/void-linux/void-packages.git
 cd velotype-musl
 
-# Verify the pinned source and cache it where xbps-src will find it.
 ./scripts/prepare-source.sh ../void-packages/hostdir/sources/velotype-0.7.5
 cp -a srcpkgs/velotype ../void-packages/srcpkgs/
 
@@ -20,14 +23,14 @@ cd ../void-packages
 ./xbps-src -A x86_64-musl pkg velotype
 ```
 
-The package is written under `void-packages/hostdir/binpkgs/`. Install it from that local repository with `xbps-install --repository=hostdir/binpkgs velotype`.
+The generated package is placed under `void-packages/hostdir/binpkgs/`.
 
-`scripts/prepare-source.sh` verifies the source archive against the committed SHA-256. It refuses a mismatched archive and can reuse a previously downloaded archive only after verifying the same digest. It never updates the expected checksum automatically.
+## musl compatibility
 
-## CI
+Upstream's transitive `xattr 0.2.3` currently references `libc::ENOATTR`, which is unavailable on musl Linux. The package template patches this to `libc::ENODATA` only after Cargo fetches the pinned dependency. It updates Cargo's per-file digest while compiling, then restores the shared Cargo cache on success or failure.
 
-GitHub Actions builds the package on `x86_64-musl` with `xbps-src` and uploads the generated `.xbps` package as a workflow artifact. It caches the verified upstream source and Void binary-package downloads to reduce repeated downloads. The package is not considered working until the build job succeeds.
+## CI and reproducibility
 
-## Updating Velotype
+GitHub Actions builds the actual `.xbps` package through `xbps-src`, and uploads it as a workflow artifact. The CI workflow caches the pinned source archive, Cargo registry and Void binary packages. Source archives are always validated against the committed SHA-256; the expected checksum is never silently regenerated.
 
-When updating upstream, set `version` and `_commit` in `srcpkgs/velotype/template` to the intended release/commit, then deliberately compute and review the source archive SHA-256. Update the committed checksum only after independently verifying that the archive is the intended source. Test the updated package with `xbps-src -A x86_64-musl pkg velotype`.
+When updating Velotype, review the upstream source commit and archive checksum, then build with `./xbps-src -A x86_64-musl pkg velotype` before merging.
