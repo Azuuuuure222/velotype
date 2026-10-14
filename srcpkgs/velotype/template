@@ -69,8 +69,13 @@ do_build() {
 			_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
 			cp -f "$_velotype_xattr_src/src/sys/mod.rs" "$_velotype_xattr_backup/mod.rs"
 			trap _velotype_restore_xattr_patch EXIT
-			patch --silent --directory "$_velotype_xattr_src" --strip=1 \
-				--forward < "${FILESDIR}/xattr-musl.patch"
+			# Verify the token count so this stays a narrow downstream patch.
+			enoattr_count="$(grep -Fc '::libc::ENOATTR' "$_velotype_xattr_src/src/sys/mod.rs")"
+			if [ "$enoattr_count" -ne 1 ]; then
+				echo "velotype: expected one ENOATTR reference in xattr-0.2.3, found $enoattr_count" >&2
+				return 1
+			fi
+			sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$_velotype_xattr_src/src/sys/mod.rs"
 		elif ! grep -Fq '::libc::ENODATA' "$_velotype_xattr_src/src/sys/mod.rs"; then
 			echo "velotype: xattr-0.2.3 source does not match the expected musl patch context" >&2
 			return 1
