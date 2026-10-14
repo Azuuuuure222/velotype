@@ -19,8 +19,7 @@ maintainer="Azuuuuure222"
 license="Apache-2.0"
 homepage="https://github.com/manyougz/velotype"
 distfiles="${homepage}/archive/${_commit}.tar.gz"
-# Run scripts/prepare-source.sh to replace this placeholder with the archive SHA-256.
-checksum=SKIP
+checksum=a65a9f6dfc6697650b8368e9be925a8f218cfb52e1246d32f9a95f1de5a2f84a
 
 post_install() {
 	vlicense LICENSE-APACHE
