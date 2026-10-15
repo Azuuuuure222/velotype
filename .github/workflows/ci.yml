@@ -1,0 +1,39 @@
+name: Validate Velotype package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "srcpkgs/velotype/**"
+      - "scripts/**"
+      - ".github/workflows/**"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: velotype-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check shell syntax
+        run: |
+          set -euo pipefail
+          bash -n srcpkgs/velotype/template
+          bash -n scripts/prepare-source.sh
+          bash -n scripts/test-xattr-patch.sh
+
+      - name: Test musl xattr patch lifecycle
+        run: bash scripts/test-xattr-patch.sh
