@@ -40,7 +40,7 @@ post_patch() {
 	default_count="$(grep -Fc "$default_gpui" "$manifest" || true)"
 	wayland_count="$(grep -Fc "$wayland_gpui" "$manifest" || true)"
 	if [ "$default_count" -eq 1 ] && [ "$wayland_count" -eq 0 ]; then
-		if ! sed -i "s|$default_gpui|$wayland_gpui|" "$manifest"; then
+		if ! sed -i 's|^gpui = { version = "0.2", features = \\["runtime_shaders"\\] }$|gpui = { version = "0.2", default-features = false, features = ["font-kit", "runtime_shaders", "wayland"] }|' "$manifest"; then
 			echo "velotype: could not set GPUI to Wayland-only features" >&2
 			return 1
 		fi
