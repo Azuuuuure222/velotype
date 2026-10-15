@@ -6,6 +6,7 @@ on:
     paths:
       - "srcpkgs/velotype/**"
       - "scripts/prepare-source.sh"
+      - "scripts/test-xattr-patch.sh"
       - ".github/workflows/build.yml"
   workflow_dispatch:
 
@@ -154,7 +155,7 @@ jobs:
             find hostdir/binpkgs -type f -name "velotype-${{ steps.source.outputs.version }}_*.xbps" -print
           )
           if [ "${#packages[@]}" -ne 1 ]; then
-            printf 'Expected one Velotype package, found %s\n' "${#packages[@]}" >&2
+            printf 'Expected one Velotype package, found %s\\n' "${#packages[@]}" >&2
             find hostdir/binpkgs -type f -name '*velotype*.xbps' -print >&2
             exit 1
           fi
@@ -213,8 +214,8 @@ jobs:
 
           packages=(dist/*.xbps)
           if [ "${#packages[@]}" -ne 1 ]; then
-            printf 'Expected exactly one .xbps asset, found %s\n' "${#packages[@]}" >&2
-            printf '%s\n' "${packages[@]}" >&2
+            printf 'Expected exactly one .xbps asset, found %s\\n' "${#packages[@]}" >&2
+            printf '%s\\n' "${packages[@]}" >&2
             exit 1
           fi
 
@@ -231,12 +232,12 @@ jobs:
             sha256sum "$package_name" > SHA256SUMS
             sha512sum "$package_name" > SHA512SUMS
             {
-              printf 'Package: %s\n' "$package_name"
-              printf 'Package version/revision: %s_%s\n' "$VERSION" "$REVISION"
-              printf 'Target architecture: x86_64-musl\n'
-              printf 'CPU tuning: Intel Skylake\n'
-              printf 'Upstream source commit: %s\n' "$UPSTREAM_COMMIT"
-              printf 'Packaging commit: %s\n' "$RELEASE_COMMIT"
+              printf 'Package: %s\\n' "$package_name"
+              printf 'Package version/revision: %s_%s\\n' "$VERSION" "$REVISION"
+              printf 'Target architecture: x86_64-musl\\n'
+              printf 'CPU tuning: Intel Skylake\\n'
+              printf 'Upstream source commit: %s\\n' "$UPSTREAM_COMMIT"
+              printf 'Packaging commit: %s\\n' "$RELEASE_COMMIT"
             } > BUILD-INFO.txt
           )
 
