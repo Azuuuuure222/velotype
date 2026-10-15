@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Keep regression failures actionable in CI, especially for strict assertions.
+trap 'status=$?; printf "test-xattr-patch.sh: failure at line %s: %s (exit %s)\\n" "$LINENO" "$BASH_COMMAND" "$status" >&2; exit "$status"' ERR
+
 repo_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 template="${repo_root}/srcpkgs/velotype/template"
 tmp="$(mktemp -d)"
