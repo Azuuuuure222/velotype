@@ -6,7 +6,7 @@ _commit=a61c71955c6104fc5d647088b5957da6d59149ca
 wrksrc="${pkgname}-${_commit}"
 build_style=cargo
 make_check=no
-hostmakedepends="pkg-config cmake clang wayland-protocols binutils"
+hostmakedepends="pkg-config cmake clang wayland-protocols"
 # Wayland-only runtime: X11 headers and client libraries are intentionally absent.
 makedepends="fontconfig-devel freetype-devel openssl-devel
  libxkbcommon-devel wayland-devel
@@ -228,7 +228,7 @@ _velotype_apply_gpui_x11_patch() {
 
 _velotype_assert_wayland_only() {
 	tree_file="$(mktemp "${wrksrc}/.cargo-tree-wayland.XXXXXX")"
-	if ! cargo tree --locked --offline --target "$RUST_TARGET" -e features > "$tree_file"; then
+	if ! cargo tree --locked --offline --target "$RUST_TARGET" -e normal,build,features > "$tree_file"; then
 		echo "velotype: unable to inspect the locked Cargo feature graph" >&2
 		rm -f -- "$tree_file"
 		return 1
