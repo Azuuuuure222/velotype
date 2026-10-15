@@ -74,6 +74,7 @@ else
 	status=$?
 	[[ "$status" -eq 71 ]] || { echo "unexpected build status: $status" >&2; exit 1; }
 fi
+trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
 if do_install; then
@@ -83,6 +84,7 @@ else
 	status=$?
 	[[ "$status" -eq 72 ]] || { echo "unexpected install status: $status" >&2; exit 1; }
 fi
+trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
 echo "xattr musl patch lifecycle tests passed"
