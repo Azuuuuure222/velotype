@@ -58,39 +58,75 @@ _velotype_apply_xattr_patch() {
 	fi
 
 	xattr_file="${_velotype_xattr_src}/src/sys/mod.rs"
+	_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
+
 	if grep -Fq '::libc::ENOATTR' "$xattr_file"; then
-		# Verify the expected upstream context before changing anything.
+		# Preserve the source before changing it.
 		enoattr_count="$(grep -Fc '::libc::ENOATTR' "$xattr_file")"
 		if [ "$enoattr_count" -ne 1 ]; then
 			echo "velotype: expected one ENOATTR reference in xattr-0.2.3, found $enoattr_count" >&2
+			rm -rf -- "$_velotype_xattr_backup"
+			_velotype_xattr_backup=
 			return 1
 		fi
-
-		_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
 		if ! cp -f "$xattr_file" "${_velotype_xattr_backup}/mod.rs"; then
 			rm -rf -- "$_velotype_xattr_backup"
 			_velotype_xattr_backup=
 			return 1
 		fi
-		trap _velotype_restore_xattr_patch EXIT
-
-		if ! sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$xattr_file"; then
-			_velotype_restore_xattr_patch
-			trap - EXIT
-			return 1
-		fi
-		if grep -Fq '::libc::ENOATTR' "$xattr_file" || ! grep -Fq '::libc::ENODATA' "$xattr_file"; then
-			echo "velotype: xattr musl patch verification failed" >&2
-			_velotype_restore_xattr_patch
-			trap - EXIT
-			return 1
-		fi
 	elif grep -Fq '::libc::ENODATA' "$xattr_file"; then
-		# A prior interrupted run or an already-patched cache may leave this
-		# compatible spelling behind; it is safe to compile as-is.
-		return 0
+		# Recover safely if an earlier interrupted process left the shared
+		# Cargo registry patched: restore the original file from Cargo's .crate.
+		crate_archive="$(find "$cargo_home/registry/cache" -mindepth 2 -maxdepth 2 \
+			-type f -name 'xattr-0.2.3.crate' -print -quit 2>/dev/null || true)"
+		if [ -z "$crate_archive" ]; then
+			echo "velotype: xattr source is already patched, but its pristine crate archive is missing" >&2
+			rm -rf -- "$_velotype_xattr_backup"
+			_velotype_xattr_backup=
+			return 1
+		fi
+		if ! tar -xOf "$crate_archive" xattr-0.2.3/src/sys/mod.rs > "${_velotype_xattr_backup}/mod.rs"; then
+			echo "velotype: cannot restore xattr-0.2.3/src/sys/mod.rs from its crate archive" >&2
+			rm -rf -- "$_velotype_xattr_backup"
+			_velotype_xattr_backup=
+			return 1
+		fi
+		if ! grep -Fq '::libc::ENOATTR' "${_velotype_xattr_backup}/mod.rs"; then
+			# The cached archive itself no longer needs this workaround.
+			rm -rf -- "$_velotype_xattr_backup"
+			_velotype_xattr_backup=
+			return 0
+		fi
 	else
 		echo "velotype: xattr-0.2.3 source does not match the expected musl patch context" >&2
+		rm -rf -- "$_velotype_xattr_backup"
+		_velotype_xattr_backup=
+		return 1
+	fi
+
+	# Register cleanup before restoring or editing any source file.
+	trap _velotype_restore_xattr_patch EXIT
+	if ! cp -f "${_velotype_xattr_backup}/mod.rs" "$xattr_file"; then
+		echo "velotype: cannot restore pristine xattr source before patching" >&2
+		_velotype_restore_xattr_patch
+		trap - EXIT
+		return 1
+	fi
+	if ! grep -Fq '::libc::ENOATTR' "$xattr_file"; then
+		echo "velotype: pristine xattr source has no expected ENOATTR reference" >&2
+		_velotype_restore_xattr_patch
+		trap - EXIT
+		return 1
+	fi
+	if ! sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$xattr_file"; then
+		_velotype_restore_xattr_patch
+		trap - EXIT
+		return 1
+	fi
+	if grep -Fq '::libc::ENOATTR' "$xattr_file" || ! grep -Fq '::libc::ENODATA' "$xattr_file"; then
+		echo "velotype: xattr musl patch verification failed" >&2
+		_velotype_restore_xattr_patch
+		trap - EXIT
 		return 1
 	fi
 }
