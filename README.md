@@ -20,6 +20,7 @@ sha512sum -c SHA512SUMS
 ```
 
 These are standalone package releases, not a signed, indexed XBPS repository. The package targets `x86_64-musl` and is optimized for Intel Skylake; it is not suitable for older x86_64 CPUs.
+Release tags include the package version and XBPS revision. If a build with the same version/revision produces different package bytes, the release job fails rather than replacing a published package silently; increment `revision` in `srcpkgs/velotype/template` when changing the packaged output.
 
 ## Build locally
 
