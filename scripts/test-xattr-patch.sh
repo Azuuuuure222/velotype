@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 template="${repo_root}/srcpkgs/velotype/template"
 tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
