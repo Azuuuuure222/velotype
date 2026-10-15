@@ -6,13 +6,17 @@ This package pins Velotype `0.7.5` to upstream commit `a61c71955c6104fc5d647088b
 
 ## Target hardware
 
-The binary is optimized specifically for the Intel Core i3-6100U (Skylake): C/C++ components use `-O2 -march=skylake`, and Rust uses `-C target-cpu=skylake`. It is not intended for pre-Skylake x86_64 CPUs. Cargo builds default to two parallel jobs to limit build-time memory pressure.
+The binary is optimized specifically for the Intel Core i3-6100U (Skylake): C/C++ components use `-O2 -march=skylake`, and Rust uses `-C target-cpu=skylake`. It is not intended for pre-Skylake x86_64 CPUs.
+
+## Build host vs. target device
+
+Published packages are compiled on GitHub Actions, not on the target device. The target CPU/ISA, `x86_64-musl` ABI, and Wayland configuration define the resulting binary's compatibility and runtime behavior. The target's two physical CPU cores, 4 GB RAM, and HDD must not be used to cap CI compilation parallelism. Cargo and XBPS should use the build runner's available resources, with any limits justified by the runner's actual memory/CPU capacity or observed build failures.
 
 ## Wayland-only build
 
 The package explicitly disables GPUI's default features and enables its Wayland backend; X11 headers and client development libraries are not package dependencies. GPUI 0.2.2 also enables `xkbcommon/x11` explicitly and leaves `xkbcommon` default features enabled, which can reintroduce X11 even with GPUI's own X11 backend disabled. The package build removes the explicit X11 feature and disables `xkbcommon` defaults while preserving Wayland. It checks the normal/build Cargo feature graph for Wayland and rejects X11 features/crates, then checks the executable's direct ELF dependencies for X11 libraries.
 
-Vulkan, Mesa, Wayland, xkbcommon, fontconfig and freetype dependencies are retained because GPUI still needs the renderer, display protocol, keyboard handling and font/text stack. The build remains tuned for Skylake and limits Cargo concurrency to two jobs to reduce memory pressure.
+Vulkan, Mesa, Wayland, xkbcommon, fontconfig and freetype dependencies are retained because GPUI still needs the renderer, display protocol, keyboard handling and font/text stack. The binary remains tuned for Skylake, while Cargo/XBPS compilation parallelism is determined by the GitHub Actions build runner rather than the target device.
 
 ## Latest release
 
@@ -29,6 +33,8 @@ These are standalone package releases, not a signed, indexed XBPS repository. Th
 Release tags include the package version and XBPS revision. If a build with the same version/revision produces different package bytes, the release job fails rather than replacing a published package silently; increment `revision` in `srcpkgs/velotype/template` when changing the packaged output.
 
 ## Build locally
+
+Published release builds run on GitHub Actions. The following commands are for manual reproduction or debugging; when building manually, choose concurrency according to the machine doing the compilation, not the machine that will run the resulting package.
 
 ```sh
 git clone https://github.com/Azuuuuure222/velotype-musl.git
