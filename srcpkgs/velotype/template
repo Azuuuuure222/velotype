@@ -58,9 +58,9 @@ post_patch() {
 	fi
 }
 
-# xattr 0.2.3 references libc::ENOATTR on Linux, unavailable on musl.
-# cargo's install phase compiles again, so apply this compatibility patch in
-# both build and install. Never leave the shared Cargo registry modified.
+# GPUI's default Linux features enable X11 alongside Wayland, and xattr 0.2.3
+# references libc::ENOATTR, unavailable on musl. Keep the patched Cargo cache
+# limited to each build/install command and restore both dependency manifests.
 _velotype_gpui_x11_count() {
 	awk '
 		/\.dependencies\.xkbcommon\]/ { in_section=1; sections++; next }
@@ -441,7 +441,7 @@ post_install() {
 		echo "velotype: readelf is required to validate Wayland-only linkage" >&2
 		return 1
 	fi
-	if readelf -d "$binary" | grep -Eq 'Shared library: \[(libX11|libxcb|libXrandr|libXi|libXcursor|libXdamage|libXfixes|libXrender|libXext|libXinerama|libXxf86vm|libxkbcommon-x11)\.so'; then
+	if readelf -d "$binary" | grep -Eq 'Shared library: \[(libX[^]]*\.so|libxcb\.so|libxkbcommon-x11\.so)'; then
 		echo "velotype: executable still has a direct X11 shared-library dependency" >&2
 		return 1
 	fi
