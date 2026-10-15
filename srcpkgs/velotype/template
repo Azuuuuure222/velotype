@@ -82,15 +82,15 @@ _velotype_gpui_wayland_count() {
 _velotype_restore_xattr_patch() {
 	restore_failed=0
 
-	if [ -n "\${_velotype_xattr_src:-}" ] && [ -n "\${_velotype_xattr_backup:-}" ]; then
-		if [ ! -f "\${_velotype_xattr_backup}/mod.rs" ]; then
-			echo "velotype: xattr restoration backup is missing at \${_velotype_xattr_backup}" >&2
+	if [ -n "${_velotype_xattr_src:-}" ] && [ -n "${_velotype_xattr_backup:-}" ]; then
+		if [ ! -f "${_velotype_xattr_backup}/mod.rs" ]; then
+			echo "velotype: xattr restoration backup is missing at ${_velotype_xattr_backup}" >&2
 			restore_failed=1
-		elif ! cp -f "\${_velotype_xattr_backup}/mod.rs" "\${_velotype_xattr_src}/src/sys/mod.rs"; then
-			echo "velotype: failed to restore cached xattr source; backup retained at \${_velotype_xattr_backup}" >&2
+		elif ! cp -f "${_velotype_xattr_backup}/mod.rs" "${_velotype_xattr_src}/src/sys/mod.rs"; then
+			echo "velotype: failed to restore cached xattr source; backup retained at ${_velotype_xattr_backup}" >&2
 			restore_failed=1
-		elif ! rm -rf -- "\${_velotype_xattr_backup}"; then
-			echo "velotype: failed to remove xattr backup \${_velotype_xattr_backup}" >&2
+		elif ! rm -rf -- "${_velotype_xattr_backup}"; then
+			echo "velotype: failed to remove xattr backup ${_velotype_xattr_backup}" >&2
 			restore_failed=1
 		else
 			_velotype_xattr_src=
@@ -98,15 +98,15 @@ _velotype_restore_xattr_patch() {
 		fi
 	fi
 
-	if [ -n "\${_velotype_gpui_manifest:-}" ] && [ -n "\${_velotype_gpui_backup:-}" ]; then
-		if [ ! -f "\${_velotype_gpui_backup}/Cargo.toml" ]; then
-			echo "velotype: GPUI restoration backup is missing at \${_velotype_gpui_backup}" >&2
+	if [ -n "${_velotype_gpui_manifest:-}" ] && [ -n "${_velotype_gpui_backup:-}" ]; then
+		if [ ! -f "${_velotype_gpui_backup}/Cargo.toml" ]; then
+			echo "velotype: GPUI restoration backup is missing at ${_velotype_gpui_backup}" >&2
 			restore_failed=1
-		elif ! cp -f "\${_velotype_gpui_backup}/Cargo.toml" "\${_velotype_gpui_manifest}"; then
-			echo "velotype: failed to restore cached GPUI manifest; backup retained at \${_velotype_gpui_backup}" >&2
+		elif ! cp -f "${_velotype_gpui_backup}/Cargo.toml" "${_velotype_gpui_manifest}"; then
+			echo "velotype: failed to restore cached GPUI manifest; backup retained at ${_velotype_gpui_backup}" >&2
 			restore_failed=1
-		elif ! rm -rf -- "\${_velotype_gpui_backup}"; then
-			echo "velotype: failed to remove GPUI backup \${_velotype_gpui_backup}" >&2
+		elif ! rm -rf -- "${_velotype_gpui_backup}"; then
+			echo "velotype: failed to remove GPUI backup ${_velotype_gpui_backup}" >&2
 			restore_failed=1
 		else
 			_velotype_gpui_manifest=
@@ -118,8 +118,8 @@ _velotype_restore_xattr_patch() {
 }
 
 _velotype_apply_gpui_x11_patch() {
-	cargo_home="\${CARGO_HOME:-/host/cargo}"
-	lockfile="\${wrksrc}/Cargo.lock"
+	cargo_home="${CARGO_HOME:-/host/cargo}"
+	lockfile="${wrksrc}/Cargo.lock"
 	if [ ! -f "$lockfile" ]; then
 		echo "velotype: cannot find Cargo.lock in $wrksrc" >&2
 		return 1
@@ -136,12 +136,12 @@ _velotype_apply_gpui_x11_patch() {
 	fi
 
 	gpui_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
-		-type d -name "gpui-\${gpui_version}" -print -quit 2>/dev/null || true)"
+		-type d -name "gpui-${gpui_version}" -print -quit 2>/dev/null || true)"
 	if [ -z "$gpui_src" ]; then
-		echo "velotype: missing fetched GPUI source gpui-\${gpui_version}" >&2
+		echo "velotype: missing fetched GPUI source gpui-${gpui_version}" >&2
 		return 1
 	fi
-	gpui_manifest="\${gpui_src}/Cargo.toml"
+	gpui_manifest="${gpui_src}/Cargo.toml"
 	if [ ! -f "$gpui_manifest" ]; then
 		echo "velotype: missing GPUI Cargo.toml at $gpui_manifest" >&2
 		return 1
@@ -160,8 +160,8 @@ _velotype_apply_gpui_x11_patch() {
 	if [ "$x11_count" -eq 1 ]; then
 		# GPUI 0.2.2 accidentally enables both xkbcommon backends even when
 		# its own X11 windowing feature is disabled. Remove only xkbcommon/x11.
-		_velotype_gpui_backup="$(mktemp -d "\${wrksrc}/.gpui-wayland.XXXXXX")"
-		if ! cp -f "$gpui_manifest" "\${_velotype_gpui_backup}/Cargo.toml"; then
+		_velotype_gpui_backup="$(mktemp -d "${wrksrc}/.gpui-wayland.XXXXXX")"
+		if ! cp -f "$gpui_manifest" "${_velotype_gpui_backup}/Cargo.toml"; then
 			rm -rf -- "$_velotype_gpui_backup"
 			_velotype_gpui_backup=
 			return 1
@@ -169,7 +169,7 @@ _velotype_apply_gpui_x11_patch() {
 		_velotype_gpui_manifest="$gpui_manifest"
 		trap _velotype_restore_xattr_patch EXIT
 
-		tmp_manifest="\${gpui_manifest}.velotype-tmp"
+		tmp_manifest="${gpui_manifest}.velotype-tmp"
 		if ! sed '/\.dependencies\.xkbcommon\]/,/optional = true/{ /"x11",/d; }' \
 			"$gpui_manifest" > "$tmp_manifest"; then
 			rm -f -- "$tmp_manifest"
@@ -193,14 +193,14 @@ _velotype_apply_gpui_x11_patch() {
 		# If an earlier interrupted build left the registry edited, retain the
 		# pristine manifest from Cargo's immutable crate archive for cleanup.
 		crate_archive="$(find "$cargo_home/registry/cache" -mindepth 2 -maxdepth 2 \
-			-type f -name "gpui-\${gpui_version}.crate" -print -quit 2>/dev/null || true)"
+			-type f -name "gpui-${gpui_version}.crate" -print -quit 2>/dev/null || true)"
 		if [ -n "$crate_archive" ]; then
-			original_manifest="\${wrksrc}/.gpui-original-Cargo.toml"
-			if tar -xOf "$crate_archive" "gpui-\${gpui_version}/Cargo.toml" > "$original_manifest"; then
+			original_manifest="${wrksrc}/.gpui-original-Cargo.toml"
+			if tar -xOf "$crate_archive" "gpui-${gpui_version}/Cargo.toml" > "$original_manifest"; then
 				original_x11_count="$(_velotype_gpui_x11_count "$original_manifest")" || original_x11_count=99
 				if [ "$original_x11_count" -eq 1 ]; then
-					_velotype_gpui_backup="$(mktemp -d "\${wrksrc}/.gpui-wayland.XXXXXX")"
-					if ! cp -f "$original_manifest" "\${_velotype_gpui_backup}/Cargo.toml"; then
+					_velotype_gpui_backup="$(mktemp -d "${wrksrc}/.gpui-wayland.XXXXXX")"
+					if ! cp -f "$original_manifest" "${_velotype_gpui_backup}/Cargo.toml"; then
 						rm -rf -- "$_velotype_gpui_backup"
 						_velotype_gpui_backup=
 						rm -f -- "$original_manifest"
@@ -219,7 +219,7 @@ _velotype_apply_gpui_x11_patch() {
 }
 
 _velotype_assert_wayland_only() {
-	tree_file="\$(mktemp "\${wrksrc}/.cargo-tree-wayland.XXXXXX")"
+	tree_file="$(mktemp "${wrksrc}/.cargo-tree-wayland.XXXXXX")"
 	if ! cargo tree --locked --offline --target "$RUST_TARGET" -e features > "$tree_file"; then
 		echo "velotype: unable to inspect the locked Cargo feature graph" >&2
 		rm -f -- "$tree_file"
@@ -245,7 +245,7 @@ _velotype_assert_wayland_only() {
 _velotype_apply_xattr_patch() {
 	[ "$XBPS_TARGET_LIBC" = "musl" ] || return 0
 
-	cargo_home="\${CARGO_HOME:-/host/cargo}"
+	cargo_home="${CARGO_HOME:-/host/cargo}"
 	_velotype_xattr_src=
 	_velotype_xattr_backup=
 	_velotype_gpui_manifest=
@@ -255,7 +255,7 @@ _velotype_apply_xattr_patch() {
 		/^\[\[package\]\]/ { in_gpui=0 }
 		/^name = "gpui"$/ { in_gpui=1; next }
 		in_gpui && /^version = "/ { gsub(/"/, "", $3); print $3; exit }
-	' "\${wrksrc}/Cargo.lock")"
+	' "${wrksrc}/Cargo.lock")"
 	if [ -z "$gpui_version" ]; then
 		echo "velotype: unable to determine the locked GPUI version" >&2
 		return 1
@@ -265,32 +265,32 @@ _velotype_apply_xattr_patch() {
 	xattr_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
 		-type d -name 'xattr-0.2.3' -print -quit 2>/dev/null || true)"
 	gpui_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
-		-type d -name "gpui-\${gpui_version}" -print -quit 2>/dev/null || true)"
+		-type d -name "gpui-${gpui_version}" -print -quit 2>/dev/null || true)"
 	if [ -z "$xattr_src" ] || [ -z "$gpui_src" ]; then
 		cargo fetch --locked --target "$RUST_TARGET" || return $?
 		xattr_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
 			-type d -name 'xattr-0.2.3' -print -quit 2>/dev/null || true)"
 		gpui_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
-			-type d -name "gpui-\${gpui_version}" -print -quit 2>/dev/null || true)"
+			-type d -name "gpui-${gpui_version}" -print -quit 2>/dev/null || true)"
 	fi
 	if [ -z "$xattr_src" ]; then
 		echo "velotype: expected fetched xattr-0.2.3 source under $cargo_home/registry/src" >&2
 		return 1
 	fi
 	if [ -z "$gpui_src" ]; then
-		echo "velotype: expected fetched GPUI source gpui-\${gpui_version}" >&2
+		echo "velotype: expected fetched GPUI source gpui-${gpui_version}" >&2
 		return 1
 	fi
 
-	xattr_file="\${xattr_src}/src/sys/mod.rs"
+	xattr_file="${xattr_src}/src/sys/mod.rs"
 	if grep -Fq '::libc::ENOATTR' "$xattr_file"; then
 		enoattr_count="$(grep -Fc '::libc::ENOATTR' "$xattr_file")"
 		if [ "$enoattr_count" -ne 1 ]; then
 			echo "velotype: expected one ENOATTR reference in xattr-0.2.3, found $enoattr_count" >&2
 			return 1
 		fi
-		_velotype_xattr_backup="$(mktemp -d "\${wrksrc}/.xattr-musl.XXXXXX")"
-		if ! cp -f "$xattr_file" "\${_velotype_xattr_backup}/mod.rs"; then
+		_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
+		if ! cp -f "$xattr_file" "${_velotype_xattr_backup}/mod.rs"; then
 			rm -rf -- "$_velotype_xattr_backup"
 			_velotype_xattr_backup=
 			return 1
@@ -300,13 +300,13 @@ _velotype_apply_xattr_patch() {
 		crate_archive="$(find "$cargo_home/registry/cache" -mindepth 2 -maxdepth 2 \
 			-type f -name 'xattr-0.2.3.crate' -print -quit 2>/dev/null || true)"
 		if [ -n "$crate_archive" ]; then
-			_velotype_xattr_backup="$(mktemp -d "\${wrksrc}/.xattr-musl.XXXXXX")"
-			if ! tar -xOf "$crate_archive" xattr-0.2.3/src/sys/mod.rs > "\${_velotype_xattr_backup}/mod.rs"; then
+			_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
+			if ! tar -xOf "$crate_archive" xattr-0.2.3/src/sys/mod.rs > "${_velotype_xattr_backup}/mod.rs"; then
 				rm -rf -- "$_velotype_xattr_backup"
 				_velotype_xattr_backup=
 				return 1
 			fi
-			if grep -Fq '::libc::ENOATTR' "\${_velotype_xattr_backup}/mod.rs"; then
+			if grep -Fq '::libc::ENOATTR' "${_velotype_xattr_backup}/mod.rs"; then
 				_velotype_xattr_src="$xattr_src"
 			else
 				rm -rf -- "$_velotype_xattr_backup"
