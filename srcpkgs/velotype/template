@@ -43,12 +43,15 @@ _velotype_restore_xattr_patch() {
 _velotype_apply_xattr_patch() {
 	[ "$XBPS_TARGET_LIBC" = "musl" ] || return 0
 
-	# Ensure the locked crate is present before checking or patching it.
-	cargo fetch --locked --target "$RUST_TARGET" || return $?
-
+	# Avoid network access when the exact locked crate is already cached.
 	cargo_home="${CARGO_HOME:-/host/cargo}"
 	_velotype_xattr_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
-		-type d -name 'xattr-0.2.3' -print -quit)"
+		-type d -name 'xattr-0.2.3' -print -quit 2>/dev/null || true)"
+	if [ -z "$_velotype_xattr_src" ]; then
+		cargo fetch --locked --target "$RUST_TARGET" || return $?
+		_velotype_xattr_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
+			-type d -name 'xattr-0.2.3' -print -quit 2>/dev/null || true)"
+	fi
 	if [ -z "$_velotype_xattr_src" ]; then
 		echo "velotype: expected fetched xattr-0.2.3 source under $cargo_home/registry/src" >&2
 		return 1
