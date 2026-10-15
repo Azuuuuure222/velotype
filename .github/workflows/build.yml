@@ -301,9 +301,9 @@ jobs:
           fi
 
           release_url="$(gh release view "$release_tag" --json url --jq .url)"
-          is_latest="$(gh release view "$release_tag" --json isLatest --jq .isLatest)"
-          if [ "$is_latest" != "true" ]; then
-            echo "GitHub did not mark $release_tag as Latest." >&2
+          latest_tag="$(gh api "repos/${GH_REPO}/releases/latest" --jq .tag_name)"
+          if [ "$latest_tag" != "$release_tag" ]; then
+            echo "GitHub's latest release is $latest_tag; expected $release_tag." >&2
             exit 1
           fi
 
