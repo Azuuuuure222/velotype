@@ -15,8 +15,14 @@ cat > "${fake_bin}/cargo" <<'STUB'
 #!/usr/bin/env bash
 case "${1:-}:${2:-}" in
 	fetch:*) exit 0 ;;
-	auditable:build) exit 71 ;;
-	auditable:install) exit 72 ;;
+	auditable:build|auditable:install)
+		case "${CFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
+		case "${CXXFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
+		case "${RUSTFLAGS:-}" in *target-cpu=skylake*) ;; *) exit 99 ;; esac
+		[ "${CARGO_BUILD_JOBS:-}" = 2 ] || exit 99
+		[ "$2" = build ] && exit 71
+		exit 72
+		;;
 	*) exit 0 ;;
 esac
 STUB
