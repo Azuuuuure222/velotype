@@ -8,6 +8,12 @@ This package pins Velotype `0.7.5` to upstream commit `a61c71955c6104fc5d647088b
 
 The binary is optimized specifically for the Intel Core i3-6100U (Skylake): C/C++ components use `-O2 -march=skylake`, and Rust uses `-C target-cpu=skylake`. It is not intended for pre-Skylake x86_64 CPUs. Cargo builds default to two parallel jobs to limit build-time memory pressure.
 
+## Wayland-only build
+
+The package explicitly disables GPUI's default features and enables its Wayland backend; X11 headers and client development libraries are not package dependencies. The build also removes GPUI 0.2.2's transitive `xkbcommon/x11` feature, which is enabled in its published manifest even when the X11 window backend is disabled. The build checks the resolved Cargo feature graph for Wayland and rejects X11 features/crates, then checks the executable's direct ELF dependencies for X11 libraries.
+
+Vulkan, Mesa, Wayland, xkbcommon, fontconfig and freetype dependencies are retained because GPUI still needs the renderer, display protocol, keyboard handling and font/text stack. The build remains tuned for Skylake and limits Cargo concurrency to two jobs to reduce memory pressure.
+
 ## Latest release
 
 After a successful package build from `main`, Actions creates a package-versioned GitHub Release or verifies that an existing release contains identical package bytes before marking it **Latest**. Each release includes the native `.xbps` package, `SHA256SUMS`, `SHA512SUMS`, and `BUILD-INFO.txt`.
