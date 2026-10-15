@@ -6,6 +6,7 @@ on:
     paths:
       - "srcpkgs/velotype/**"
       - "scripts/prepare-source.sh"
+      - "scripts/publish-release.sh"
       - ".github/workflows/build.yml"
   workflow_dispatch:
 
@@ -111,8 +112,11 @@ jobs:
           set -euo pipefail
           bash -n srcpkgs/velotype/template
           bash -n scripts/prepare-source.sh
+          bash -n scripts/publish-release.sh
           bash -n scripts/test-xattr-patch.sh
+          bash -n scripts/test-publish-release.sh
           bash scripts/test-xattr-patch.sh
+          bash scripts/test-publish-release.sh
           ./scripts/prepare-source.sh "void-packages/hostdir/sources/velotype-${{ steps.source.outputs.version }}"
           mkdir -p void-packages/srcpkgs/velotype
           cp -a srcpkgs/velotype/. void-packages/srcpkgs/velotype/
@@ -185,7 +189,7 @@ jobs:
           key: void-repocache-v2-${{ env.XBPS_TARGET_ARCH }}-${{ hashFiles('void-packages/xbps-src', 'void-packages/srcpkgs/base-chroot/template') }}
 
   release:
-    name: Publish latest GitHub Release
+    name: Publish version-tagged GitHub Release
     if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
@@ -193,13 +197,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout release helper
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - name: Download the successful package build
         uses: actions/download-artifact@v8
         with:
           name: velotype-x86_64-musl
           path: dist
 
-      - name: Publish or verify latest release
+      - name: Publish or verify release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -207,114 +216,4 @@ jobs:
           REVISION: ${{ needs.build.outputs.revision }}
           UPSTREAM_COMMIT: ${{ needs.build.outputs.commit }}
           RELEASE_COMMIT: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-
-          packages=(dist/*.xbps)
-          if [ "${#packages[@]}" -ne 1 ]; then
-            printf 'Expected exactly one .xbps asset, found %s\n' "${#packages[@]}" >&2
-            printf '%s\n' "${packages[@]}" >&2
-            exit 1
-          fi
-
-          package_path="${packages[0]}"
-          package_name="$(basename "$package_path")"
-          expected_name="velotype-${VERSION}_${REVISION}.x86_64-musl.xbps"
-          if [ "$package_name" != "$expected_name" ]; then
-            echo "Unexpected package name: $package_name (expected $expected_name)" >&2
-            exit 1
-          fi
-
-          (
-            cd dist
-            sha256sum "$package_name" > SHA256SUMS
-            sha512sum "$package_name" > SHA512SUMS
-            {
-              printf 'Package: %s\n' "$package_name"
-              printf 'Package version/revision: %s_%s\n' "$VERSION" "$REVISION"
-              printf 'Target architecture: x86_64-musl\n'
-              printf 'CPU tuning: Intel Skylake\n'
-              printf 'Upstream source commit: %s\n' "$UPSTREAM_COMMIT"
-              printf 'Packaging commit: %s\n' "$RELEASE_COMMIT"
-            } > BUILD-INFO.txt
-          )
-
-          release_tag="velotype-${VERSION}_${REVISION}"
-          release_title="Velotype ${VERSION}_${REVISION} — x86_64-musl"
-          cat > dist/RELEASE_NOTES.md <<EOF
-          Automated Void Linux package release for Velotype ${VERSION}-${REVISION}.
-
-          - **Target:** x86_64-musl
-          - **CPU target:** Intel Skylake (including the Core i3-6100U); not intended for pre-Skylake CPUs.
-          - **Upstream source commit:** ${UPSTREAM_COMMIT}
-          - **Packaging commit:** ${RELEASE_COMMIT}
-          - **Integrity:** SHA-256 and SHA-512 manifests are attached.
-
-          This release contains a standalone XBPS package, not a signed, indexed XBPS repository.
-          EOF
-
-          assets=(
-            "$package_path"
-            dist/SHA256SUMS
-            dist/SHA512SUMS
-            dist/BUILD-INFO.txt
-          )
-
-          if gh release view "$release_tag" --json tagName >/dev/null 2>&1; then
-            echo "Release $release_tag already exists; checking package identity before updating Latest."
-            mkdir -p dist/existing
-            if ! gh release download "$release_tag" \
-              --pattern "$package_name" \
-              --pattern SHA256SUMS \
-              --pattern SHA512SUMS \
-              --pattern BUILD-INFO.txt \
-              --dir dist/existing; then
-              echo "Could not verify all assets in the existing release; refusing to mutate it." >&2
-              exit 1
-            fi
-
-            for required in "$package_name" SHA256SUMS SHA512SUMS BUILD-INFO.txt; do
-              if [ ! -s "dist/existing/$required" ]; then
-                echo "Existing release is missing required asset: $required" >&2
-                exit 1
-              fi
-            done
-
-            (cd dist/existing && sha256sum --check SHA256SUMS && sha512sum --check SHA512SUMS)
-            if ! cmp -s dist/SHA256SUMS dist/existing/SHA256SUMS ||
-               ! cmp -s dist/SHA512SUMS dist/existing/SHA512SUMS; then
-              echo "The package changed without a version/revision bump." >&2
-              echo "Increment revision in srcpkgs/velotype/template before publishing different package bytes." >&2
-              exit 1
-            fi
-
-            # A prior interrupted run may have left a draft with this tag.
-            # Explicitly publish it and mark it Latest after verifying its assets.
-            gh release edit "$release_tag" --draft=false --latest
-            echo "Existing assets match; release was published and marked Latest."
-          else
-            gh release create "$release_tag" "${assets[@]}" \
-              --title "$release_title" \
-              --notes-file dist/RELEASE_NOTES.md \
-              --target "$RELEASE_COMMIT" \
-              --latest
-          fi
-
-          # Verify publication through the tag-specific CLI endpoint. The
-          # /releases/latest REST endpoint returns 403 for this workflow token.
-          release_draft="$(gh release view "$release_tag" --json isDraft --jq .isDraft)"
-          if [ "$release_draft" != "false" ]; then
-            echo "Release $release_tag still appears to be a draft after publication." >&2
-            exit 1
-          fi
-          release_url="$(gh release view "$release_tag" --json url --jq .url)"
-
-          {
-            echo "## Velotype release published"
-            echo
-            echo "- Release: [$release_tag]($release_url)"
-            echo "- Package: $package_name"
-            echo "- Target: x86_64-musl / Intel Skylake"
-            echo "- SHA-256 and SHA-512 manifests: attached to the release"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: bash scripts/publish-release.sh dist

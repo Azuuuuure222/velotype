@@ -1,4 +1,4 @@
-# velotype-musl
+# velotype
 
 Void Linux `x86_64-musl` package for [Velotype](https://github.com/manyougz/velotype), a native Rust/GPUI Markdown editor.
 
@@ -20,9 +20,9 @@ Vulkan, Mesa, Wayland, xkbcommon, fontconfig and freetype dependencies are retai
 
 ## Latest release
 
-After a successful package build from `main`, Actions creates a package-versioned GitHub Release or verifies that an existing release contains identical package bytes before marking it **Latest**. Each release includes the native `.xbps` package, `SHA256SUMS`, `SHA512SUMS`, and `BUILD-INFO.txt`.
+After a successful package build from `main`, Actions publishes a GitHub Release whose tag and title are the upstream version only (for example, `0.7.5`). The package asset retains the XBPS revision and architecture: `velotype-0.7.5_2.x86_64-musl.xbps`. Each release includes the native `.xbps` package, `SHA256SUMS`, `SHA512SUMS`, and `BUILD-INFO.txt`.
 
-Download assets from the [latest release](https://github.com/Azuuuuure222/velotype-musl/releases/latest), then verify them from the directory containing the downloaded files:
+Download assets from the [latest release](https://github.com/Azuuuuure222/velotype/releases/latest), then verify them from the directory containing the downloaded files:
 
 ```sh
 sha256sum -c SHA256SUMS
@@ -30,16 +30,16 @@ sha512sum -c SHA512SUMS
 ```
 
 These are standalone package releases, not a signed, indexed XBPS repository. The package targets `x86_64-musl` and is optimized for Intel Skylake; it is not suitable for older x86_64 CPUs.
-Release tags include the package version and XBPS revision. If a build with the same version/revision produces different package bytes, the release job fails rather than replacing a published package silently; increment `revision` in `srcpkgs/velotype/template` when changing the packaged output.
+The release tag is version-only; the asset name carries both the package version and revision. Rebuilding the same version/revision must produce identical package bytes or publishing fails. When packaging changes without an upstream version change, increment `revision` in `srcpkgs/velotype/template`; the workflow then updates that version's release to the higher revision and replaces its package/checksum assets. Existing pre-migration releases remain available under their original tags.
 
 ## Build locally
 
 Published release builds run on GitHub Actions. The following commands are for manual reproduction or debugging; when building manually, choose concurrency according to the machine doing the compilation, not the machine that will run the resulting package.
 
 ```sh
-git clone https://github.com/Azuuuuure222/velotype-musl.git
+git clone https://github.com/Azuuuuure222/velotype.git
 git clone https://github.com/void-linux/void-packages.git
-cd velotype-musl
+cd velotype
 
 ./scripts/prepare-source.sh ../void-packages/hostdir/sources/velotype-0.7.5
 mkdir -p ../void-packages/srcpkgs/velotype

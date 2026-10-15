@@ -66,7 +66,7 @@ if gh release view "$release_tag" --json tagName >/dev/null 2>&1; then
         if [[ "$asset_revision" =~ ^[0-9]+$ ]]; then
           existing_package_assets+=("$asset")
           asset_revision_number=$((10#$asset_revision))
-          (( asset_revision_number > max_revision )) && max_revision="$asset_revision_number"
+          if (( asset_revision_number > max_revision )); then max_revision="$asset_revision_number"; fi
           [[ "$asset" == "$package_name" ]] && current_asset_present=true
         fi
         ;;
