@@ -14,7 +14,7 @@ mkdir -p "$fake_bin" "$cargo_home/registry/src/test-index/xattr-0.2.3/src/sys" "
 cat > "${fake_bin}/cargo" <<'STUB'
 #!/usr/bin/env bash
 case "${1:-}:${2:-}" in
-	fetch:*) exit 0 ;;
+	fetch:*) [ "${CARGO_TEST_MODE:-failure}" = fetch-failure ] && exit 73; exit 0 ;;
 	auditable:build|auditable:install)
 		case "${CFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${CXXFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
@@ -67,6 +67,19 @@ assert_original_source() {
 		exit 1
 	fi
 }
+
+# A failed Cargo fetch must be propagated rather than hidden by later checks.
+mv "$cargo_home/registry/src/test-index/xattr-0.2.3" "${tmp}/xattr-0.2.3"
+export CARGO_TEST_MODE=fetch-failure
+if _velotype_apply_xattr_patch; then
+	echo "expected the mocked Cargo fetch to fail" >&2
+	exit 1
+else
+	status=$?
+	[[ "$status" -eq 73 ]] || { echo "unexpected fetch status: $status" >&2; exit 1; }
+fi
+mv "${tmp}/xattr-0.2.3" "$cargo_home/registry/src/test-index/xattr-0.2.3"
+export CARGO_TEST_MODE=failure
 
 # Exercise a clean patch/restore cycle, as used by a successful phase.
 _velotype_apply_xattr_patch
