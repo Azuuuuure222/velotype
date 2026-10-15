@@ -279,8 +279,13 @@ _velotype_assert_wayland_only() {
 	fi
 	if grep -Fq 'gpui feature "x11"' "$tree_file" ||
 	   grep -Fq 'xkbcommon feature "x11"' "$tree_file" ||
-	   grep -Eq '(^|[[:space:]])(as-raw-xcb-connection|x11-clipboard|x11-dl|x11rb|x11rb-protocol|xcb|zed-xim)([[:space:]]|$)' "$tree_file"; then
+	   grep -Eq '(^|[[:space:]])(as-raw-xcb-connection|x11|x11-clipboard|x11-dl|x11rb|x11rb-protocol|xcb|xcursor|xim-ctext|xim-parser|zed-xim)([[:space:]]|$)' "$tree_file"; then
 		echo "velotype: X11 features or dependencies remain in the resolved Cargo graph" >&2
+		if [ -n "${_velotype_gpui_manifest:-}" ]; then
+			echo "Patched GPUI xkbcommon dependency:" >&2
+			awk '/\.dependencies\.xkbcommon\]/,/optional = true/' "$_velotype_gpui_manifest" >&2
+		fi
+		cargo tree --locked --offline --target "$RUST_TARGET" -e normal,build,features -i xkbcommon >&2 || true
 		grep -E 'x11|xcb|zed-xim|xim' "$tree_file" >&2 || true
 		rm -f -- "$tree_file"
 		return 1
