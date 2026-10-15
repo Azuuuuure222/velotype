@@ -16,7 +16,8 @@ git clone https://github.com/void-linux/void-packages.git
 cd velotype-musl
 
 ./scripts/prepare-source.sh ../void-packages/hostdir/sources/velotype-0.7.5
-cp -a srcpkgs/velotype ../void-packages/srcpkgs/
+mkdir -p ../void-packages/srcpkgs/velotype
+cp -a srcpkgs/velotype/. ../void-packages/srcpkgs/velotype/
 
 cd ../void-packages
 ./xbps-src -A x86_64-musl binary-bootstrap
@@ -27,10 +28,10 @@ The generated package is placed under `void-packages/hostdir/binpkgs/`.
 
 ## musl compatibility
 
-Upstream's transitive `xattr 0.2.3` references `libc::ENOATTR`, which is unavailable on musl Linux. The package template patches this to `libc::ENODATA` only after Cargo fetches the pinned dependency, then restores the shared Cargo registry source on success or failure.
+Upstream's transitive `xattr 0.2.3` references `libc::ENOATTR`, which is unavailable on musl Linux. Void's Cargo build style compiles during both `do_build` and `do_install`, so the template applies a narrow, context-checked `ENOATTR` → `ENODATA` substitution before each Cargo command and restores the cached source on normal success or failure. The workflow runs `scripts/test-xattr-patch.sh` before the full build to verify the patch and cleanup paths without compiling the application.
 
 ## CI and reproducibility
 
-GitHub Actions builds the actual `.xbps` package through `xbps-src`, and uploads it as a workflow artifact. CI caches the pinned source archive, Cargo registry and Void binary packages. Source archives are always validated against the committed SHA-256; the expected checksum is never silently regenerated. The package cache is saved after the build attempt, including failures, so it retains the actual dependency downloads.
+GitHub Actions builds the actual `.xbps` package through `xbps-src` and uploads it as a workflow artifact. CI caches the pinned source archive, Cargo registry and Void binary packages. The source cache key includes both the upstream commit and its expected SHA-256; source archives are validated against that checksum on every run, and the checksum is never silently regenerated. The workflow checks shell syntax and the musl patch lifecycle before bootstrapping Void and compiling the application.
 
 When updating Velotype, review the upstream source commit and archive checksum, then build with `./xbps-src -A x86_64-musl pkg velotype` before merging.
