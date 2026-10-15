@@ -111,7 +111,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: void-packages/hostdir/sources/velotype-${{ steps.source.outputs.version }}
-          key: velotype-source-v1-${{ steps.source.outputs.commit }}
+          key: velotype-source-v2-${{ steps.source.outputs.commit }}-${{ steps.source.outputs.checksum }}
 
       - name: Install static xbps
         run: |
