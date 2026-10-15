@@ -104,7 +104,8 @@ jobs:
           bash -n scripts/test-xattr-patch.sh
           bash scripts/test-xattr-patch.sh
           ./scripts/prepare-source.sh "void-packages/hostdir/sources/velotype-${{ steps.source.outputs.version }}"
-          cp -a srcpkgs/velotype void-packages/srcpkgs/velotype
+          mkdir -p void-packages/srcpkgs/velotype
+          cp -a srcpkgs/velotype/. void-packages/srcpkgs/velotype/
 
       - name: Save verified source archive
         if: steps.source-cache.outputs.cache-hit != 'true'
