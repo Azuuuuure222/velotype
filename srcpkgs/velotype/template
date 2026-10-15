@@ -114,25 +114,29 @@ _velotype_apply_xattr_patch() {
 	trap _velotype_restore_xattr_patch EXIT
 	if ! cp -f "${_velotype_xattr_backup}/mod.rs" "$xattr_file"; then
 		echo "velotype: cannot restore pristine xattr source before patching" >&2
-		_velotype_restore_xattr_patch
-		trap - EXIT
+		if _velotype_restore_xattr_patch; then
+			trap - EXIT
+		fi
 		return 1
 	fi
 	if ! grep -Fq '::libc::ENOATTR' "$xattr_file"; then
 		echo "velotype: pristine xattr source has no expected ENOATTR reference" >&2
-		_velotype_restore_xattr_patch
-		trap - EXIT
+		if _velotype_restore_xattr_patch; then
+			trap - EXIT
+		fi
 		return 1
 	fi
 	if ! sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$xattr_file"; then
-		_velotype_restore_xattr_patch
-		trap - EXIT
+		if _velotype_restore_xattr_patch; then
+			trap - EXIT
+		fi
 		return 1
 	fi
 	if grep -Fq '::libc::ENOATTR' "$xattr_file" || ! grep -Fq '::libc::ENODATA' "$xattr_file"; then
 		echo "velotype: xattr musl patch verification failed" >&2
-		_velotype_restore_xattr_patch
-		trap - EXIT
+		if _velotype_restore_xattr_patch; then
+			trap - EXIT
+		fi
 		return 1
 	fi
 }
