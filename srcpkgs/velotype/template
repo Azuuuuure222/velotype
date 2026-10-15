@@ -31,11 +31,13 @@ esac
 # both build and install. Never leave the shared Cargo registry modified.
 _velotype_restore_xattr_patch() {
 	if [ -n "${_velotype_xattr_src:-}" ] && [ -n "${_velotype_xattr_backup:-}" ]; then
-		if [ -f "${_velotype_xattr_backup}/mod.rs" ]; then
-			if ! cp -f "${_velotype_xattr_backup}/mod.rs" "${_velotype_xattr_src}/src/sys/mod.rs"; then
-				echo "velotype: failed to restore cached xattr source; backup retained at ${_velotype_xattr_backup}" >&2
-				return 1
-			fi
+		if [ ! -f "${_velotype_xattr_backup}/mod.rs" ]; then
+			echo "velotype: xattr restoration backup is missing at ${_velotype_xattr_backup}" >&2
+			return 1
+		fi
+		if ! cp -f "${_velotype_xattr_backup}/mod.rs" "${_velotype_xattr_src}/src/sys/mod.rs"; then
+			echo "velotype: failed to restore cached xattr source; backup retained at ${_velotype_xattr_backup}" >&2
+			return 1
 		fi
 		rm -rf -- "${_velotype_xattr_backup}" || {
 			echo "velotype: failed to remove xattr backup ${_velotype_xattr_backup}" >&2
