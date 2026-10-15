@@ -34,6 +34,10 @@ jobs:
           bash -n srcpkgs/velotype/template
           bash -n scripts/prepare-source.sh
           bash -n scripts/test-xattr-patch.sh
+          bash -n scripts/test-prepare-source.sh
+
+      - name: Test source checksum and cache behavior
+        run: bash scripts/test-prepare-source.sh
 
       - name: Test musl xattr patch lifecycle
         run: bash scripts/test-xattr-patch.sh
