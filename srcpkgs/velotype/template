@@ -27,8 +27,8 @@ case "$XBPS_TARGET_MACHINE" in
 esac
 
 # xattr 0.2.3 references libc::ENOATTR on Linux, unavailable on musl.
-# Patch only the fetched registry source for this build, then restore it so
-# the shared Cargo cache remains unmodified.
+# cargo's install phase compiles again, so apply this compatibility patch in
+# both build and install. Never leave the shared Cargo registry modified.
 _velotype_restore_xattr_patch() {
 	if [ -n "${_velotype_xattr_src:-}" ] && [ -n "${_velotype_xattr_backup:-}" ]; then
 		if [ -f "${_velotype_xattr_backup}/mod.rs" ]; then
@@ -38,6 +38,58 @@ _velotype_restore_xattr_patch() {
 	fi
 	_velotype_xattr_src=
 	_velotype_xattr_backup=
+}
+
+_velotype_apply_xattr_patch() {
+	[ "$XBPS_TARGET_LIBC" = "musl" ] || return 0
+
+	# Ensure the locked crate is present before checking or patching it.
+	cargo fetch --locked --target "$RUST_TARGET"
+
+	cargo_home="${CARGO_HOME:-/host/cargo}"
+	_velotype_xattr_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
+		-type d -name 'xattr-0.2.3' -print -quit)"
+	if [ -z "$_velotype_xattr_src" ]; then
+		echo "velotype: expected fetched xattr-0.2.3 source under $cargo_home/registry/src" >&2
+		return 1
+	fi
+
+	xattr_file="${_velotype_xattr_src}/src/sys/mod.rs"
+	if grep -Fq '::libc::ENOATTR' "$xattr_file"; then
+		# Verify the expected upstream context before changing anything.
+		enoattr_count="$(grep -Fc '::libc::ENOATTR' "$xattr_file")"
+		if [ "$enoattr_count" -ne 1 ]; then
+			echo "velotype: expected one ENOATTR reference in xattr-0.2.3, found $enoattr_count" >&2
+			return 1
+		fi
+
+		_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
+		if ! cp -f "$xattr_file" "${_velotype_xattr_backup}/mod.rs"; then
+			rm -rf -- "$_velotype_xattr_backup"
+			_velotype_xattr_backup=
+			return 1
+		fi
+		trap _velotype_restore_xattr_patch EXIT
+
+		if ! sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$xattr_file"; then
+			_velotype_restore_xattr_patch
+			trap - EXIT
+			return 1
+		fi
+		if grep -Fq '::libc::ENOATTR' "$xattr_file" || ! grep -Fq '::libc::ENODATA' "$xattr_file"; then
+			echo "velotype: xattr musl patch verification failed" >&2
+			_velotype_restore_xattr_patch
+			trap - EXIT
+			return 1
+		fi
+	elif grep -Fq '::libc::ENODATA' "$xattr_file"; then
+		# A prior interrupted run or an already-patched cache may leave this
+		# compatible spelling behind; it is safe to compile as-is.
+		return 0
+	else
+		echo "velotype: xattr-0.2.3 source does not match the expected musl patch context" >&2
+		return 1
+	fi
 }
 
 do_build() {
@@ -53,34 +105,7 @@ do_build() {
 
 	_velotype_xattr_src=
 	_velotype_xattr_backup=
-	if [ "$XBPS_TARGET_LIBC" = "musl" ]; then
-		# Download/unpack dependencies before editing the registry source.
-		cargo fetch --locked --target "$RUST_TARGET"
-
-		cargo_home="${CARGO_HOME:-/host/cargo}"
-		_velotype_xattr_src="$(find "$cargo_home/registry/src" -mindepth 2 -maxdepth 2 \
-			-type d -name 'xattr-0.2.3' -print -quit)"
-		if [ -z "$_velotype_xattr_src" ]; then
-			echo "velotype: expected fetched xattr-0.2.3 source under $cargo_home/registry/src" >&2
-			return 1
-		fi
-
-		if grep -Fq '::libc::ENOATTR' "$_velotype_xattr_src/src/sys/mod.rs"; then
-			_velotype_xattr_backup="$(mktemp -d "${wrksrc}/.xattr-musl.XXXXXX")"
-			cp -f "$_velotype_xattr_src/src/sys/mod.rs" "$_velotype_xattr_backup/mod.rs"
-			trap _velotype_restore_xattr_patch EXIT
-			# Verify the token count so this stays a narrow downstream patch.
-			enoattr_count="$(grep -Fc '::libc::ENOATTR' "$_velotype_xattr_src/src/sys/mod.rs")"
-			if [ "$enoattr_count" -ne 1 ]; then
-				echo "velotype: expected one ENOATTR reference in xattr-0.2.3, found $enoattr_count" >&2
-				return 1
-			fi
-			sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$_velotype_xattr_src/src/sys/mod.rs"
-		elif ! grep -Fq '::libc::ENODATA' "$_velotype_xattr_src/src/sys/mod.rs"; then
-			echo "velotype: xattr-0.2.3 source does not match the expected musl patch context" >&2
-			return 1
-		fi
-	fi
+	_velotype_apply_xattr_patch || return $?
 
 	if ${make_cmd} build ${XBPS_VERBOSE+${make_verbose}} --release --locked --target "${RUST_TARGET}" \
 		${configure_args} ${make_build_args}; then
@@ -92,6 +117,32 @@ do_build() {
 		trap - EXIT
 		return "$build_status"
 	fi
+}
+
+# Void's cargo build style runs cargo install --offline here, which may compile
+# dependencies again. Keep the musl patch active for that entire command too.
+do_install() {
+	: ${make_cmd:=cargo auditable}
+	: ${make_install_args:=--path .}
+	: ${make_verbose:=-v}
+
+	_velotype_xattr_src=
+	_velotype_xattr_backup=
+	_velotype_apply_xattr_patch || return $?
+
+	if ${make_cmd} install ${XBPS_VERBOSE+${make_verbose}} --target "${RUST_TARGET}" --root="${DESTDIR}/usr" \
+		--offline --locked ${configure_args} ${make_install_args}; then
+		_velotype_restore_xattr_patch
+		trap - EXIT
+	else
+		install_status=$?
+		_velotype_restore_xattr_patch
+		trap - EXIT
+		return "$install_status"
+	fi
+
+	rm -f "${DESTDIR}/usr/.crates.toml"
+	rm -f "${DESTDIR}/usr/.crates2.json"
 }
 
 post_install() {
