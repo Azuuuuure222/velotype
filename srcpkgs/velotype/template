@@ -79,6 +79,45 @@ _velotype_gpui_wayland_count() {
 	' "$1"
 }
 
+_velotype_gpui_default_false_count() {
+	awk '
+		/\.dependencies\.xkbcommon\]/ { in_section=1; sections++; next }
+		/^\[/ { in_section=0 }
+		in_section && /default-features = false/ { count++ }
+		END { if (sections != 1) exit 2; print count+0 }
+	' "$1"
+}
+
+_velotype_rewrite_gpui_wayland_manifest() {
+	manifest="$1"
+	tmp_manifest="${manifest}.velotype-tmp"
+	if ! awk '
+		/\.dependencies\.xkbcommon\]/ { in_section=1; sections++; print; next }
+		/^\[/ { in_section=0 }
+		in_section && /"x11",/ { next }
+		in_section && /^optional = true$/ { print "default-features = false"; optional_count++ }
+		{ print }
+		END { if (sections != 1 || optional_count != 1) exit 2 }
+	' "$manifest" > "$tmp_manifest"; then
+		rm -f -- "$tmp_manifest"
+		echo "velotype: failed to rewrite GPUI xkbcommon features in the reviewed manifest context" >&2
+		return 1
+	fi
+
+	x11_count="$(_velotype_gpui_x11_count "$tmp_manifest")" || x11_count=99
+	wayland_count="$(_velotype_gpui_wayland_count "$tmp_manifest")" || wayland_count=0
+	default_count="$(_velotype_gpui_default_false_count "$tmp_manifest")" || default_count=99
+	if [ "$x11_count" -ne 0 ] || [ "$wayland_count" -lt 1 ] || [ "$default_count" -ne 1 ]; then
+		rm -f -- "$tmp_manifest"
+		echo "velotype: GPUI Wayland-only manifest rewrite failed validation" >&2
+		return 1
+	fi
+	if ! mv -f "$tmp_manifest" "$manifest"; then
+		rm -f -- "$tmp_manifest"
+		return 1
+	fi
+}
+
 _velotype_restore_xattr_patch() {
 	restore_failed=0
 
@@ -158,8 +197,12 @@ _velotype_apply_gpui_x11_patch() {
 	fi
 
 	if [ "$x11_count" -eq 1 ]; then
-		# GPUI 0.2.2 accidentally enables both xkbcommon backends even when
-		# its own X11 windowing feature is disabled. Remove only xkbcommon/x11.
+		# Keep only Wayland on xkbcommon and disable its X11 default feature.
+		default_count="$(_velotype_gpui_default_false_count "$gpui_manifest")" || return 1
+		if [ "$default_count" -ne 0 ]; then
+			echo "velotype: unexpected xkbcommon default-feature setting in upstream GPUI manifest" >&2
+			return 1
+		fi
 		_velotype_gpui_backup="$(mktemp -d "${wrksrc}/.gpui-wayland.XXXXXX")"
 		if ! cp -f "$gpui_manifest" "${_velotype_gpui_backup}/Cargo.toml"; then
 			rm -rf -- "$_velotype_gpui_backup"
@@ -168,30 +211,13 @@ _velotype_apply_gpui_x11_patch() {
 		fi
 		_velotype_gpui_manifest="$gpui_manifest"
 		trap _velotype_restore_xattr_patch EXIT
-
-		tmp_manifest="${gpui_manifest}.velotype-tmp"
-		if ! sed '/\.dependencies\.xkbcommon\]/,/optional = true/{ /"x11",/d; }' \
-			"$gpui_manifest" > "$tmp_manifest"; then
-			rm -f -- "$tmp_manifest"
-			if _velotype_restore_xattr_patch; then trap - EXIT; fi
-			return 1
-		fi
-		patched_x11_count="$(_velotype_gpui_x11_count "$tmp_manifest")" || patched_x11_count=99
-		patched_wayland_count="$(_velotype_gpui_wayland_count "$tmp_manifest")" || patched_wayland_count=0
-		if [ "$patched_x11_count" -ne 0 ] || [ "$patched_wayland_count" -lt 1 ]; then
-			rm -f -- "$tmp_manifest"
-			echo "velotype: GPUI Wayland-only feature patch failed validation" >&2
-			if _velotype_restore_xattr_patch; then trap - EXIT; fi
-			return 1
-		fi
-		if ! mv -f "$tmp_manifest" "$gpui_manifest"; then
-			rm -f -- "$tmp_manifest"
+		if ! _velotype_rewrite_gpui_wayland_manifest "$gpui_manifest"; then
 			if _velotype_restore_xattr_patch; then trap - EXIT; fi
 			return 1
 		fi
 	elif [ "$x11_count" -eq 0 ]; then
-		# If an earlier interrupted build left the registry edited, retain the
-		# pristine manifest from Cargo's immutable crate archive for cleanup.
+		# Recover the pristine source when a prior interrupted build left the
+		# shared registry partially patched, then complete the Wayland patch.
 		crate_archive="$(find "$cargo_home/registry/cache" -mindepth 2 -maxdepth 2 \
 			-type f -name "gpui-${gpui_version}.crate" -print -quit 2>/dev/null || true)"
 		if [ -z "$crate_archive" ]; then
@@ -220,6 +246,18 @@ _velotype_apply_gpui_x11_patch() {
 		_velotype_gpui_manifest="$gpui_manifest"
 		trap _velotype_restore_xattr_patch EXIT
 		rm -f -- "$original_manifest"
+
+		default_count="$(_velotype_gpui_default_false_count "$gpui_manifest")" || default_count=99
+		if [ "$default_count" -eq 0 ]; then
+			if ! _velotype_rewrite_gpui_wayland_manifest "$gpui_manifest"; then
+				if _velotype_restore_xattr_patch; then trap - EXIT; fi
+				return 1
+			fi
+		elif [ "$default_count" -ne 1 ]; then
+			echo "velotype: unexpected default-feature count in stale GPUI manifest" >&2
+			if _velotype_restore_xattr_patch; then trap - EXIT; fi
+			return 1
+		fi
 	else
 		echo "velotype: unexpected count of X11 feature entries in GPUI xkbcommon dependency: $x11_count" >&2
 		return 1
