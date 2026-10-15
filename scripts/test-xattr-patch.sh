@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Keep regression failures actionable in CI, especially for strict assertions.
-trap 'status=$?; printf "test-xattr-patch.sh: failure at line %s: %s (exit %s)\\n" "$LINENO" "$BASH_COMMAND" "$status" >&2; exit "$status"' ERR
+trap 'status=$?; printf "test-xattr-patch.sh: failure at line %s: %s (exit %s)\n" "$LINENO" "$BASH_COMMAND" "$status" >&2; exit "$status"' ERR
 
 repo_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 template="${repo_root}/srcpkgs/velotype/template"
@@ -63,7 +63,7 @@ case "${1:-}:${2:-}" in
 		case "${CFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${CXXFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${RUSTFLAGS:-}" in *target-cpu=skylake*) ;; *) exit 99 ;; esac
-		[ "${CARGO_BUILD_JOBS:-}" = 2 ] || exit 99
+		[ "${CARGO_BUILD_JOBS:-}" = 6 ] || exit 99
 		[ "${CARGO_TEST_MODE:-failure}" = success ] && exit 0
 		[ "$2" = build ] && exit 71
 		exit 72
@@ -103,7 +103,7 @@ export RUST_TARGET=x86_64-unknown-linux-musl
 export CFLAGS=
 export CXXFLAGS=
 export RUSTFLAGS=
-export CARGO_BUILD_JOBS=2
+export CARGO_BUILD_JOBS=6
 export DESTDIR="${tmp}/destdir"
 export configure_args=
 export make_build_args=
@@ -114,6 +114,18 @@ export CARGO_TEST_LOG="${tmp}/cargo-commands.log"
 : > "$CARGO_TEST_LOG"
 # The template expects this path to be available as a shell variable.
 source "$template"
+# The package recipe must preserve runner-selected parallelism and must not
+# reintroduce a target-device-based default job limit.
+export CARGO_BUILD_JOBS=6
+_velotype_set_build_env
+[[ "$CARGO_BUILD_JOBS" -eq 6 ]]
+unset CARGO_BUILD_JOBS
+_velotype_set_build_env
+if [[ -n "${CARGO_BUILD_JOBS+x}" ]]; then
+	echo "package recipe hard-coded a Cargo build-job limit" >&2
+	exit 1
+fi
+export CARGO_BUILD_JOBS=6
 # Sourcing the template sets wrksrc; point it at the isolated test workspace.
 wrksrc="$tmp/work"
 local_gpui_manifest="$wrksrc/.cargo-patches/gpui/Cargo.toml"
