@@ -310,7 +310,7 @@ jobs:
             echo "## Velotype release published"
             echo
             echo "- Release: [$release_tag]($release_url)"
-            echo "- Package: `$package_name`"
-            echo "- Target: `x86_64-musl` / Intel Skylake"
+            echo "- Package: $package_name"
+            echo "- Target: x86_64-musl / Intel Skylake"
             echo "- SHA-256 and SHA-512 manifests: attached to the release"
           } >> "$GITHUB_STEP_SUMMARY"
