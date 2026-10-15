@@ -138,6 +138,21 @@ if grep -Fq '::libc::ENOATTR' "$xattr_file"; then
 	echo "ENOATTR remained after applying the musl compatibility patch" >&2
 	exit 1
 fi
+
+# Prove the resolved-feature assertion rejects a graph that re-enables X11.
+cat > "${tmp}/cargo-tree-with-x11.txt" <<'TREE'
+gpui v0.2.2
+├── gpui feature "wayland"
+├── gpui feature "x11"
+└── xkbcommon feature "x11"
+TREE
+export CARGO_TEST_TREE="${tmp}/cargo-tree-with-x11.txt"
+if _velotype_assert_wayland_only >/dev/null 2>&1; then
+	echo "Wayland-only assertion accepted an X11-enabled feature graph" >&2
+	exit 1
+fi
+export CARGO_TEST_TREE="${tmp}/cargo-tree.txt"
+
 _velotype_restore_xattr_patch
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
