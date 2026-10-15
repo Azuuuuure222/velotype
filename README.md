@@ -28,7 +28,7 @@ The generated package is placed under `void-packages/hostdir/binpkgs/`.
 
 ## musl compatibility
 
-Upstream's transitive `xattr 0.2.3` references `libc::ENOATTR`, which is unavailable on musl Linux. Void's Cargo build style compiles during both `do_build` and `do_install`, so the template applies a narrow, context-checked `ENOATTR` → `ENODATA` substitution before each Cargo command and restores the cached source on normal success or failure. The workflow runs `scripts/test-xattr-patch.sh` before the full build to verify the patch and cleanup paths without compiling the application.
+Upstream's transitive `xattr 0.2.3` references `libc::ENOATTR`, which is unavailable on musl Linux. Void's Cargo build style compiles during both `do_build` and `do_install`, so the template applies a narrow, context-checked `ENOATTR` → `ENODATA` substitution before each Cargo command and restores the cached source on success or failure. If an interrupted build left the shared registry patched, it recovers the pristine file from Cargo's cached crate archive before applying the patch; it fails explicitly rather than silently accepting an unrecoverable modified cache. The workflow runs `scripts/test-xattr-patch.sh` before the full build, covering normal and failed commands plus stale-cache recovery without compiling the application.
 
 ## CI and reproducibility
 
