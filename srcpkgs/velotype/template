@@ -6,7 +6,7 @@ _commit=a61c71955c6104fc5d647088b5957da6d59149ca
 wrksrc="${pkgname}-${_commit}"
 build_style=cargo
 make_check=no
-hostmakedepends="pkg-config cmake clang wayland-protocols"
+hostmakedepends="pkg-config cmake clang wayland-protocols binutils"
 # Wayland-only runtime: X11 headers and client libraries are intentionally absent.
 makedepends="fontconfig-devel freetype-devel openssl-devel
  libxkbcommon-devel wayland-devel
@@ -194,24 +194,32 @@ _velotype_apply_gpui_x11_patch() {
 		# pristine manifest from Cargo's immutable crate archive for cleanup.
 		crate_archive="$(find "$cargo_home/registry/cache" -mindepth 2 -maxdepth 2 \
 			-type f -name "gpui-${gpui_version}.crate" -print -quit 2>/dev/null || true)"
-		if [ -n "$crate_archive" ]; then
-			original_manifest="${wrksrc}/.gpui-original-Cargo.toml"
-			if tar -xOf "$crate_archive" "gpui-${gpui_version}/Cargo.toml" > "$original_manifest"; then
-				original_x11_count="$(_velotype_gpui_x11_count "$original_manifest")" || original_x11_count=99
-				if [ "$original_x11_count" -eq 1 ]; then
-					_velotype_gpui_backup="$(mktemp -d "${wrksrc}/.gpui-wayland.XXXXXX")"
-					if ! cp -f "$original_manifest" "${_velotype_gpui_backup}/Cargo.toml"; then
-						rm -rf -- "$_velotype_gpui_backup"
-						_velotype_gpui_backup=
-						rm -f -- "$original_manifest"
-						return 1
-					fi
-					_velotype_gpui_manifest="$gpui_manifest"
-					trap _velotype_restore_xattr_patch EXIT
-				fi
-			fi
-			rm -f -- "$original_manifest"
+		if [ -z "$crate_archive" ]; then
+			echo "velotype: GPUI manifest is already patched, but its pristine crate archive is missing" >&2
+			return 1
 		fi
+		original_manifest="${wrksrc}/.gpui-original-Cargo.toml"
+		if ! tar -xOf "$crate_archive" "gpui-${gpui_version}/Cargo.toml" > "$original_manifest"; then
+			echo "velotype: cannot recover pristine GPUI manifest from $crate_archive" >&2
+			rm -f -- "$original_manifest"
+			return 1
+		fi
+		original_x11_count="$(_velotype_gpui_x11_count "$original_manifest")" || original_x11_count=99
+		if [ "$original_x11_count" -ne 1 ]; then
+			echo "velotype: GPUI archive does not match the expected xkbcommon/x11 feature context" >&2
+			rm -f -- "$original_manifest"
+			return 1
+		fi
+		_velotype_gpui_backup="$(mktemp -d "${wrksrc}/.gpui-wayland.XXXXXX")"
+		if ! cp -f "$original_manifest" "${_velotype_gpui_backup}/Cargo.toml"; then
+			rm -rf -- "$_velotype_gpui_backup"
+			_velotype_gpui_backup=
+			rm -f -- "$original_manifest"
+			return 1
+		fi
+		_velotype_gpui_manifest="$gpui_manifest"
+		trap _velotype_restore_xattr_patch EXIT
+		rm -f -- "$original_manifest"
 	else
 		echo "velotype: unexpected count of X11 feature entries in GPUI xkbcommon dependency: $x11_count" >&2
 		return 1
@@ -424,6 +432,20 @@ do_install() {
 }
 
 post_install() {
+	binary="${DESTDIR}/usr/bin/velotype"
+	if [ ! -x "$binary" ]; then
+		echo "velotype: expected installed executable not found: $binary" >&2
+		return 1
+	fi
+	if ! command -v readelf >/dev/null 2>&1; then
+		echo "velotype: readelf is required to validate Wayland-only linkage" >&2
+		return 1
+	fi
+	if readelf -d "$binary" | grep -Eq '\\(NEEDED\\).*Shared library: \\[(libX11|libxcb|libXrandr|libXi|libXcursor|libXdamage|libXfixes|libXrender|libXext|libXinerama|libXxf86vm|libxkbcommon-x11)\\.so'; then
+		echo "velotype: executable still has a direct X11 shared-library dependency" >&2
+		return 1
+	fi
+
 	vlicense LICENSE-APACHE
 	vdoc README.md
 	vinstall resources/linux/com.manyougz.Velotype.desktop 644 usr/share/applications
