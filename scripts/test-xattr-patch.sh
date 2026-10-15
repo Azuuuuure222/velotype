@@ -89,7 +89,9 @@ gpui v0.2.2
 ├── gpui feature "font-kit"
 ├── gpui feature "runtime_shaders"
 ├── gpui feature "wayland"
-└── xkbcommon feature "wayland"
+├── xkbcommon feature "wayland"
+└── wayland-cursor v0.31.14
+    └── xcursor v0.3.1
 TREE
 
 export PATH="${fake_bin}:${PATH}"
