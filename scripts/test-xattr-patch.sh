@@ -35,6 +35,13 @@ pub const ENOATTR: ::libc::c_int = ::libc::ENOATTR;
 RUST
 cp "$xattr_file" "${tmp}/expected-mod.rs"
 
+# Fake the immutable Cargo crate archive, used to recover a cache left patched
+# by an interrupted earlier build.
+archive_root="${tmp}/archive"
+mkdir -p "$archive_root/xattr-0.2.3/src/sys" "$cargo_home/registry/cache/test-index"
+cp "${tmp}/expected-mod.rs" "$archive_root/xattr-0.2.3/src/sys/mod.rs"
+tar -czf "$cargo_home/registry/cache/test-index/xattr-0.2.3.crate" -C "$archive_root" xattr-0.2.3
+
 export PATH="${fake_bin}:${PATH}"
 export CARGO_HOME="$cargo_home"
 export XBPS_TARGET_MACHINE=x86_64-musl
@@ -68,6 +75,14 @@ if grep -Fq '::libc::ENOATTR' "$xattr_file"; then
 	echo "ENOATTR remained after applying the musl compatibility patch" >&2
 	exit 1
 fi
+_velotype_restore_xattr_patch
+trap 'rm -rf -- "$tmp"' EXIT
+assert_original_source
+
+# Simulate an interrupted previous run leaving the shared registry patched.
+sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$xattr_file"
+_velotype_apply_xattr_patch
+grep -Fq '::libc::ENODATA' "$xattr_file"
 _velotype_restore_xattr_patch
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
