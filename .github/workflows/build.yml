@@ -6,7 +6,6 @@ on:
     paths:
       - "srcpkgs/velotype/**"
       - "scripts/prepare-source.sh"
-      - "scripts/test-xattr-patch.sh"
       - ".github/workflows/build.yml"
   workflow_dispatch:
 
