@@ -8,6 +8,19 @@ This package pins Velotype `0.7.5` to upstream commit `a61c71955c6104fc5d647088b
 
 The binary is optimized specifically for the Intel Core i3-6100U (Skylake): C/C++ components use `-O2 -march=skylake`, and Rust uses `-C target-cpu=skylake`. It is not intended for pre-Skylake x86_64 CPUs. Cargo builds default to two parallel jobs to limit build-time memory pressure.
 
+## Latest release
+
+Every successful package build from `main` publishes or verifies the latest stable GitHub Release. The release includes the native `.xbps` package, `SHA256SUMS`, `SHA512SUMS`, and `BUILD-INFO.txt`.
+
+Download assets from the [latest release](https://github.com/Azuuuuure222/velotype-musl/releases/latest), then verify them from the directory containing the downloaded files:
+
+```sh
+sha256sum -c SHA256SUMS
+sha512sum -c SHA512SUMS
+```
+
+These are standalone package releases, not a signed, indexed XBPS repository. The package targets `x86_64-musl` and is optimized for Intel Skylake; it is not suitable for older x86_64 CPUs.
+
 ## Build locally
 
 ```sh
