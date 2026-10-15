@@ -28,6 +28,7 @@ esac
 # GPUI defaults to both Wayland and X11. Disable default features explicitly
 # so this binary has only the Wayland window backend.
 post_patch() {
+	local manifest default_gpui wayland_gpui default_count wayland_count
 	manifest="${wrksrc}/Cargo.toml"
 	default_gpui='gpui = { version = "0.2", features = ["runtime_shaders"] }'
 	wayland_gpui='gpui = { version = "0.2", default-features = false, features = ["font-kit", "runtime_shaders", "wayland"] }'
@@ -91,6 +92,7 @@ _velotype_gpui_default_false_count() {
 # Patch only the local copy under wrksrc. Never mutate Cargo's shared registry
 # source: Cargo resolves registry features from index metadata, not this file.
 _velotype_rewrite_gpui_wayland_manifest() {
+	local manifest tmp_manifest x11_count wayland_count default_count
 	manifest="$1"
 	tmp_manifest="${manifest}.velotype-tmp"
 	if ! awk '
@@ -158,6 +160,7 @@ _velotype_gpui_version() {
 }
 
 _velotype_add_gpui_path_override() {
+	local manifest patch_line
 	manifest="$1"
 	patch_line='gpui = { path = ".cargo-patches/gpui" }'
 	if grep -Fxq "$patch_line" "$manifest"; then
@@ -176,6 +179,8 @@ _velotype_add_gpui_path_override() {
 }
 
 _velotype_prepare_gpui_wayland_patch() {
+	local cargo_home app_manifest lockfile gpui_path gpui_manifest gpui_version gpui_src
+	local x11_count wayland_count default_count lock_identity
 	cargo_home="${CARGO_HOME:-/host/cargo}"
 	app_manifest="${wrksrc}/Cargo.toml"
 	lockfile="${wrksrc}/Cargo.lock"
@@ -261,6 +266,7 @@ _velotype_prepare_gpui_wayland_patch() {
 }
 
 _velotype_assert_wayland_only() {
+	local tree_file
 	tree_file="$(mktemp "${wrksrc}/.cargo-tree-wayland.XXXXXX")"
 	if ! cargo tree --locked --offline --manifest-path "${wrksrc}/Cargo.toml" --target "$RUST_TARGET" -e normal,build,features > "$tree_file"; then
 		echo "velotype: unable to inspect the locked Cargo feature graph" >&2
@@ -285,6 +291,7 @@ _velotype_assert_wayland_only() {
 }
 
 _velotype_apply_xattr_patch() {
+	local cargo_home xattr_src gpui_path xattr_file enoattr_count crate_archive
 	[ "$XBPS_TARGET_LIBC" = "musl" ] || return 0
 
 	cargo_home="${CARGO_HOME:-/host/cargo}"
