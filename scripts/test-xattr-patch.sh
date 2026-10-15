@@ -19,6 +19,8 @@ cat > "$wrksrc/Cargo.lock" <<'LOCK'
 [[package]]
 name = "gpui"
 version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 LOCK
 
 gpui_manifest="$cargo_home/registry/src/test-index/gpui-0.2.2/Cargo.toml"
@@ -37,6 +39,17 @@ cat > "${fake_bin}/cargo" <<'STUB'
 #!/usr/bin/env bash
 case "${1:-}:${2:-}" in
 	fetch:*) [ "${CARGO_TEST_MODE:-failure}" = fetch-failure ] && exit 73; exit 0 ;;
+	update:*)
+		lock_file="${CARGO_TEST_LOCK:?}"
+		tmp_lock="${lock_file}.fake-update"
+		awk '
+			/^\[\[package\]\]/ { in_gpui=0 }
+			/^name = "gpui"$/ { in_gpui=1 }
+			in_gpui && /^(source|checksum) = / { next }
+			{ print }
+		' "$lock_file" > "$tmp_lock"
+		mv -f "$tmp_lock" "$lock_file"
+		;;
 	tree:*) cat "$CARGO_TEST_TREE"; exit 0 ;;
 	auditable:build|auditable:install)
 		case "${CFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
@@ -58,14 +71,11 @@ pub const ENOATTR: ::libc::c_int = ::libc::ENOATTR;
 RUST
 cp "$xattr_file" "${tmp}/expected-mod.rs"
 
-# Fake the immutable Cargo crate archive, used to recover a cache left patched
-# by an interrupted earlier build.
+# Fake the immutable Cargo crate archive used to recover a stale xattr cache.
 archive_root="${tmp}/archive"
-mkdir -p "$archive_root/xattr-0.2.3/src/sys" "$archive_root/gpui-0.2.2"
+mkdir -p "$archive_root/xattr-0.2.3/src/sys"
 cp "${tmp}/expected-mod.rs" "$archive_root/xattr-0.2.3/src/sys/mod.rs"
-cp "${tmp}/expected-gpui-Cargo.toml" "$archive_root/gpui-0.2.2/Cargo.toml"
 tar -czf "$cargo_home/registry/cache/test-index/xattr-0.2.3.crate" -C "$archive_root" xattr-0.2.3
-tar -czf "$cargo_home/registry/cache/test-index/gpui-0.2.2.crate" -C "$archive_root" gpui-0.2.2
 
 cat > "${tmp}/cargo-tree.txt" <<'TREE'
 gpui v0.2.2
@@ -89,10 +99,12 @@ export configure_args=
 export make_build_args=
 export make_install_args=
 export CARGO_TEST_TREE="${tmp}/cargo-tree.txt"
+export CARGO_TEST_LOCK="${wrksrc}/Cargo.lock"
 # The template expects this path to be available as a shell variable.
 source "$template"
 # Sourcing the template sets wrksrc; point it at the isolated test workspace.
 wrksrc="$tmp/work"
+local_gpui_manifest="$wrksrc/.cargo-patches/gpui/Cargo.toml"
 post_patch
 # post_patch is idempotent and should never re-enable GPUI defaults.
 post_patch
@@ -132,8 +144,15 @@ export CARGO_TEST_MODE=failure
 # Exercise a clean patch/restore cycle, as used by a successful phase.
 _velotype_apply_xattr_patch
 grep -Fq '::libc::ENODATA' "$xattr_file"
-[[ "$(_velotype_gpui_x11_count "$gpui_manifest")" -eq 0 ]]
-[[ "$(_velotype_gpui_wayland_count "$gpui_manifest")" -ge 1 ]]
+[[ "$(_velotype_gpui_x11_count "$gpui_manifest")" -eq 1 ]]
+[[ "$(_velotype_gpui_x11_count "$local_gpui_manifest")" -eq 0 ]]
+[[ "$(_velotype_gpui_wayland_count "$local_gpui_manifest")" -ge 1 ]]
+[[ "$(_velotype_gpui_default_false_count "$local_gpui_manifest")" -eq 1 ]]
+grep -Fxq 'gpui = { path = ".cargo-patches/gpui" }' "$wrksrc/Cargo.toml"
+if awk '/^\[\[package\]\]/ { in_gpui=0 } /^name = "gpui"$/ { in_gpui=1 } in_gpui && /^(source|checksum) = / { found=1 } END { exit !found }' "$wrksrc/Cargo.lock"; then
+	echo "GPUI lock entry retained registry source/checksum after path override" >&2
+	exit 1
+fi
 if grep -Fq '::libc::ENOATTR' "$xattr_file"; then
 	echo "ENOATTR remained after applying the musl compatibility patch" >&2
 	exit 1
@@ -157,11 +176,12 @@ _velotype_restore_xattr_patch
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
-# Simulate an interrupted previous run leaving both registry files patched.
+# Simulate an interrupted run leaving xattr patched but the local GPUI
+# override intact. The registry copy of GPUI must remain pristine.
 sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$xattr_file"
-sed -i '/\.dependencies\.xkbcommon\]/,/optional = true/{ /"x11",/d; }' "$gpui_manifest"
 _velotype_apply_xattr_patch
-[[ "$(_velotype_gpui_x11_count "$gpui_manifest")" -eq 0 ]]
+[[ "$(_velotype_gpui_x11_count "$gpui_manifest")" -eq 1 ]]
+[[ "$(_velotype_gpui_x11_count "$local_gpui_manifest")" -eq 0 ]]
 grep -Fq '::libc::ENODATA' "$xattr_file"
 _velotype_restore_xattr_patch
 trap 'rm -rf -- "$tmp"' EXIT
