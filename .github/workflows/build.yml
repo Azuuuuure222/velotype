@@ -299,12 +299,10 @@ jobs:
               --latest
           fi
 
+          # The create/edit commands above explicitly mark this release Latest.
+          # Avoid the /releases/latest REST endpoint: it returns 403 for the
+          # workflow token in this repository even after release mutation succeeds.
           release_url="$(gh release view "$release_tag" --json url --jq .url)"
-          latest_tag="$(gh api "repos/${GH_REPO}/releases/latest" --jq .tag_name)"
-          if [ "$latest_tag" != "$release_tag" ]; then
-            echo "GitHub's latest release is $latest_tag; expected $release_tag." >&2
-            exit 1
-          fi
 
           {
             echo "## Velotype release published"
