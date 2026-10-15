@@ -98,7 +98,10 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/prepare-source.sh "void-packages/hostdir/sources/velotype-${{ steps.source.outputs.version }}"
-          bash -n srcpkgs/velotype/template scripts/prepare-source.sh
+          bash -n srcpkgs/velotype/template
+          bash -n scripts/prepare-source.sh
+          bash -n scripts/test-xattr-patch.sh
+          bash scripts/test-xattr-patch.sh
           cp -a srcpkgs/velotype void-packages/srcpkgs/velotype
 
       - name: Save verified source archive
