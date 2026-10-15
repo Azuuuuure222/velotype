@@ -259,7 +259,7 @@ _velotype_prepare_gpui_wayland_patch() {
 		return 1
 	fi
 
-	if ! grep -Fq 'gpui feature "wayland"' < <(cargo tree --locked --offline --manifest-path "$app_manifest" --target "$RUST_TARGET" -e normal,build,features); then
+	if ! grep -Fq 'gpui feature "wayland"' < <(CARGO_TERM_COLOR=never cargo tree --locked --offline --manifest-path "$app_manifest" --target "$RUST_TARGET" -e normal,build,features); then
 		echo "velotype: local GPUI override did not activate Wayland" >&2
 		return 1
 	fi
@@ -268,7 +268,7 @@ _velotype_prepare_gpui_wayland_patch() {
 _velotype_assert_wayland_only() {
 	local tree_file
 	tree_file="$(mktemp "${wrksrc}/.cargo-tree-wayland.XXXXXX")"
-	if ! cargo tree --locked --offline --manifest-path "${wrksrc}/Cargo.toml" --target "$RUST_TARGET" -e normal,build,features > "$tree_file"; then
+	if ! CARGO_TERM_COLOR=never cargo tree --locked --offline --manifest-path "${wrksrc}/Cargo.toml" --target "$RUST_TARGET" -e normal,build,features > "$tree_file"; then
 		echo "velotype: unable to inspect the locked Cargo feature graph" >&2
 		rm -f -- "$tree_file"
 		return 1
