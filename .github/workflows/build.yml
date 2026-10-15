@@ -289,8 +289,10 @@ jobs:
               exit 1
             fi
 
-            gh release edit "$release_tag" --latest
-            echo "Existing assets match; release was explicitly marked Latest."
+            # A prior interrupted run may have left a draft with this tag.
+            # Explicitly publish it and mark it Latest after verifying its assets.
+            gh release edit "$release_tag" --draft=false --latest
+            echo "Existing assets match; release was published and marked Latest."
           else
             gh release create "$release_tag" "${assets[@]}" \
               --title "$release_title" \
@@ -299,9 +301,13 @@ jobs:
               --latest
           fi
 
-          # The create/edit commands above explicitly mark this release Latest.
-          # Avoid the /releases/latest REST endpoint: it returns 403 for the
-          # workflow token in this repository even after release mutation succeeds.
+          # Verify publication through the tag-specific CLI endpoint. The
+          # /releases/latest REST endpoint returns 403 for this workflow token.
+          release_draft="$(gh release view "$release_tag" --json isDraft --jq .isDraft)"
+          if [ "$release_draft" != "false" ]; then
+            echo "Release $release_tag still appears to be a draft after publication." >&2
+            exit 1
+          fi
           release_url="$(gh release view "$release_tag" --json url --jq .url)"
 
           {
