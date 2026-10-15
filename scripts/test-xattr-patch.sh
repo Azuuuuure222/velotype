@@ -25,6 +25,10 @@ LOCK
 
 gpui_manifest="$cargo_home/registry/src/test-index/gpui-0.2.2/Cargo.toml"
 cat > "$gpui_manifest" <<'TOML'
+[package]
+name = "gpui"
+version = "0.2.2"
+
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies.xkbcommon]
 version = "0.8.0"
 features = [
