@@ -125,10 +125,13 @@ _velotype_rewrite_gpui_wayland_manifest() {
 }
 
 _velotype_restore_xattr_patch() {
-	[ -z "${_velotype_xattr_src:-}" ] || [ -z "${_velotype_xattr_backup:-}" ] && {
-		[ "${_velotype_restore_required:-0}" -eq 0 ]
-		return $?
-	}
+	if [ -z "${_velotype_xattr_src:-}" ] && [ -z "${_velotype_xattr_backup:-}" ]; then
+		return 0
+	fi
+	if [ -z "${_velotype_xattr_src:-}" ] || [ -z "${_velotype_xattr_backup:-}" ]; then
+		echo "velotype: inconsistent xattr patch restoration state" >&2
+		return 1
+	fi
 
 	if [ ! -f "${_velotype_xattr_backup}/mod.rs" ]; then
 		echo "velotype: xattr restoration backup is missing at ${_velotype_xattr_backup}" >&2
@@ -144,7 +147,6 @@ _velotype_restore_xattr_patch() {
 	fi
 	_velotype_xattr_src=
 	_velotype_xattr_backup=
-	_velotype_restore_required=0
 }
 
 _velotype_gpui_version() {
@@ -318,8 +320,7 @@ _velotype_apply_xattr_patch() {
 			return 1
 		fi
 		_velotype_xattr_src="$xattr_src"
-		_velotype_restore_required=1
-	elif grep -Fq '::libc::ENODATA' "$xattr_file"; then
+		elif grep -Fq '::libc::ENODATA' "$xattr_file"; then
 		crate_archive="$(find "$cargo_home/registry/cache" -mindepth 2 -maxdepth 2 \
 			-type f -name 'xattr-0.2.3.crate' -print -quit 2>/dev/null || true)"
 		if [ -z "$crate_archive" ]; then
