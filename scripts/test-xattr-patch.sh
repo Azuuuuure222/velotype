@@ -42,8 +42,9 @@ export configure_args=
 export make_build_args=
 export make_install_args=
 # The template expects this path to be available as a shell variable.
-wrksrc="$wrksrc"
 source "$template"
+# Sourcing the template sets wrksrc; point it at the isolated test workspace.
+wrksrc="$tmp/work"
 
 assert_original_source() {
 	if ! cmp -s "$xattr_file" "${tmp}/expected-mod.rs"; then
@@ -61,7 +62,7 @@ if grep -Fq '::libc::ENOATTR' "$xattr_file"; then
 	exit 1
 fi
 _velotype_restore_xattr_patch
-trap - EXIT
+trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
 # Exercise failure cleanup for both Cargo phases. The stub returns distinct
