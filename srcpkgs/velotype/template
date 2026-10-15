@@ -95,16 +95,29 @@ _velotype_apply_xattr_patch() {
 	fi
 }
 
+_velotype_set_build_env() {
+	# Keep target tuning applied if install recompiles in a separate phase.
+	case " ${CFLAGS:-}" in
+		*" -O2 -march=skylake") ;;
+		*) export CFLAGS="${CFLAGS:-} -O2 -march=skylake" ;;
+	esac
+	case " ${CXXFLAGS:-}" in
+		*" -O2 -march=skylake") ;;
+		*) export CXXFLAGS="${CXXFLAGS:-} -O2 -march=skylake" ;;
+	esac
+	case " ${RUSTFLAGS:-}" in
+		*" -C target-cpu=skylake") ;;
+		*) export RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=skylake" ;;
+	esac
+	# Avoid memory pressure on the target's 2-core CPU; callers may override.
+	export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
+}
+
 do_build() {
 	: ${make_cmd:=cargo auditable}
 	: ${make_verbose:=-v}
 
-	# Target-specific optimization; preserve flags supplied by xbps-src.
-	export CFLAGS="${CFLAGS:-} -O2 -march=skylake"
-	export CXXFLAGS="${CXXFLAGS:-} -O2 -march=skylake"
-	export RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=skylake"
-	# Avoid memory pressure on the target's 2-core CPU; callers may override.
-	export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
+	_velotype_set_build_env
 
 	_velotype_xattr_src=
 	_velotype_xattr_backup=
@@ -129,6 +142,7 @@ do_install() {
 	: ${make_install_args:=--path .}
 	: ${make_verbose:=-v}
 
+	_velotype_set_build_env
 	_velotype_xattr_src=
 	_velotype_xattr_backup=
 	_velotype_apply_xattr_patch || return $?
