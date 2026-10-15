@@ -10,7 +10,7 @@ The binary is optimized specifically for the Intel Core i3-6100U (Skylake): C/C+
 
 ## Wayland-only build
 
-The package explicitly disables GPUI's default features and enables its Wayland backend; X11 headers and client development libraries are not package dependencies. The build also removes GPUI 0.2.2's transitive `xkbcommon/x11` feature, which is enabled in its published manifest even when the X11 window backend is disabled. The build checks the resolved Cargo feature graph for Wayland and rejects X11 features/crates, then checks the executable's direct ELF dependencies for X11 libraries.
+The package explicitly disables GPUI's default features and enables its Wayland backend; X11 headers and client development libraries are not package dependencies. GPUI 0.2.2 also enables `xkbcommon/x11` explicitly and leaves `xkbcommon` default features enabled, which can reintroduce X11 even with GPUI's own X11 backend disabled. The package build removes the explicit X11 feature and disables `xkbcommon` defaults while preserving Wayland. It checks the normal/build Cargo feature graph for Wayland and rejects X11 features/crates, then checks the executable's direct ELF dependencies for X11 libraries.
 
 Vulkan, Mesa, Wayland, xkbcommon, fontconfig and freetype dependencies are retained because GPUI still needs the renderer, display protocol, keyboard handling and font/text stack. The build remains tuned for Skylake and limits Cargo concurrency to two jobs to reduce memory pressure.
 
