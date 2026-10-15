@@ -7,10 +7,9 @@ wrksrc="${pkgname}-${_commit}"
 build_style=cargo
 make_check=no
 hostmakedepends="pkg-config cmake clang wayland-protocols"
+# Wayland-only runtime: X11 headers and client libraries are intentionally absent.
 makedepends="fontconfig-devel freetype-devel openssl-devel
- libX11-devel libxcb-devel libXrandr-devel libXi-devel
- libXcursor-devel libXdamage-devel libXfixes-devel libXrender-devel
- libXext-devel libxkbcommon-devel wayland-devel
+ libxkbcommon-devel wayland-devel
  MesaLib-devel libglvnd-devel vulkan-loader-devel"
 short_desc="Native Markdown editor built with Rust and GPUI"
 maintainer="Azuuuuure222"
@@ -25,6 +24,39 @@ case "$XBPS_TARGET_MACHINE" in
 	x86_64-musl) ;;
 	*) broken="only supported on x86_64-musl / Intel Skylake" ;;
 esac
+
+# GPUI defaults to both Wayland and X11. Disable default features explicitly
+# so this binary has only the Wayland window backend.
+post_patch() {
+	manifest="${wrksrc}/Cargo.toml"
+	default_gpui='gpui = { version = "0.2", features = ["runtime_shaders"] }'
+	wayland_gpui='gpui = { version = "0.2", default-features = false, features = ["font-kit", "runtime_shaders", "wayland"] }'
+
+	if [ ! -f "$manifest" ]; then
+		echo "velotype: missing upstream Cargo.toml: $manifest" >&2
+		return 1
+	fi
+
+	default_count="$(grep -Fc "$default_gpui" "$manifest" || true)"
+	wayland_count="$(grep -Fc "$wayland_gpui" "$manifest" || true)"
+	if [ "$default_count" -eq 1 ] && [ "$wayland_count" -eq 0 ]; then
+		if ! sed -i "s|$default_gpui|$wayland_gpui|" "$manifest"; then
+			echo "velotype: could not set GPUI to Wayland-only features" >&2
+			return 1
+		fi
+	elif [ "$default_count" -eq 0 ] && [ "$wayland_count" -eq 1 ]; then
+		# Idempotent on re-entry, e.g. a local developer reruns the patch step.
+		:
+	else
+		echo "velotype: Cargo.toml GPUI dependency differs from the reviewed upstream context" >&2
+		return 1
+	fi
+
+	if ! grep -Fq "$wayland_gpui" "$manifest"; then
+		echo "velotype: Wayland-only GPUI manifest patch did not persist" >&2
+		return 1
+	fi
+}
 
 # xattr 0.2.3 references libc::ENOATTR on Linux, unavailable on musl.
 # cargo's install phase compiles again, so apply this compatibility patch in
