@@ -44,7 +44,7 @@ cp "$gpui_manifest" "${tmp}/expected-gpui-Cargo.toml"
 
 cat > "${fake_bin}/cargo" <<'STUB'
 #!/usr/bin/env bash
-printf '%s\\n' "$*" >> "${CARGO_TEST_LOG:?}"
+printf '%s\n' "$*" >> "${CARGO_TEST_LOG:?}"
 case "${1:-}:${2:-}" in
 	fetch:*) [ "${CARGO_TEST_MODE:-failure}" = fetch-failure ] && exit 73; exit 0 ;;
 	update:*)
@@ -212,7 +212,7 @@ assert_original_source
 built_binary="${wrksrc}/target/${RUST_TARGET}/release/velotype"
 installed_binary="${DESTDIR}/usr/bin/velotype"
 mkdir -p "$(dirname "$built_binary")"
-printf '#!/bin/sh\\nexit 0\\n' > "$built_binary"
+printf '#!/bin/sh\nexit 0\n' > "$built_binary"
 chmod 0755 "$built_binary"
 : > "$CARGO_TEST_LOG"
 if ! do_install; then
