@@ -44,6 +44,7 @@ cp "$gpui_manifest" "${tmp}/expected-gpui-Cargo.toml"
 
 cat > "${fake_bin}/cargo" <<'STUB'
 #!/usr/bin/env bash
+printf '%s\\n' "$*" >> "${CARGO_TEST_LOG:?}"
 case "${1:-}:${2:-}" in
 	fetch:*) [ "${CARGO_TEST_MODE:-failure}" = fetch-failure ] && exit 73; exit 0 ;;
 	update:*)
@@ -58,7 +59,7 @@ case "${1:-}:${2:-}" in
 		mv -f "$tmp_lock" "$lock_file"
 		;;
 	tree:*) cat "$CARGO_TEST_TREE"; exit 0 ;;
-	auditable:build|auditable:install)
+	auditable:build)
 		case "${CFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${CXXFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${RUSTFLAGS:-}" in *target-cpu=skylake*) ;; *) exit 99 ;; esac
@@ -109,6 +110,8 @@ export make_build_args=
 export make_install_args=
 export CARGO_TEST_TREE="${tmp}/cargo-tree.txt"
 export CARGO_TEST_LOCK="${wrksrc}/Cargo.lock"
+export CARGO_TEST_LOG="${tmp}/cargo-commands.log"
+: > "$CARGO_TEST_LOG"
 # The template expects this path to be available as a shell variable.
 source "$template"
 # Sourcing the template sets wrksrc; point it at the isolated test workspace.
@@ -196,7 +199,8 @@ _velotype_restore_xattr_patch
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
-# Exercise both success and failure cleanup without compiling the application.
+# Exercise build cleanup with mocked Cargo, then verify installation reuses
+# the audited build artifact rather than invoking Cargo a second time.
 export CARGO_TEST_MODE=success
 if ! do_build; then
 	echo "mocked Cargo build unexpectedly failed" >&2
@@ -205,13 +209,30 @@ fi
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
+built_binary="${wrksrc}/target/${RUST_TARGET}/release/velotype"
+installed_binary="${DESTDIR}/usr/bin/velotype"
+mkdir -p "$(dirname "$built_binary")"
+printf '#!/bin/sh\\nexit 0\\n' > "$built_binary"
+chmod 0755 "$built_binary"
+: > "$CARGO_TEST_LOG"
 if ! do_install; then
-	echo "mocked Cargo install unexpectedly failed" >&2
+	echo "prebuilt binary install unexpectedly failed" >&2
+	exit 1
+fi
+[[ -x "$installed_binary" ]] || { echo "installed executable is not executable" >&2; exit 1; }
+cmp -s "$built_binary" "$installed_binary" || {
+	echo "installed executable differs from the built binary" >&2
+	exit 1
+}
+if [ -s "$CARGO_TEST_LOG" ]; then
+	echo "do_install unexpectedly invoked Cargo and repeated compilation" >&2
+	cat "$CARGO_TEST_LOG" >&2
 	exit 1
 fi
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
+# A failed Cargo build must still restore the cached dependency source.
 export CARGO_TEST_MODE=failure
 if do_build; then
 	echo "expected the mocked Cargo build to fail" >&2
@@ -223,13 +244,17 @@ fi
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
+# Installation must fail clearly if the release artifact is missing.
+rm -f "$built_binary" "$installed_binary"
+: > "$CARGO_TEST_LOG"
 if do_install; then
-	echo "expected the mocked Cargo install to fail" >&2
+	echo "expected install to fail when the prebuilt binary is missing" >&2
 	exit 1
 else
 	status=$?
-	[[ "$status" -eq 72 ]] || { echo "unexpected install status: $status" >&2; exit 1; }
+	[[ "$status" -eq 1 ]] || { echo "unexpected install status: $status" >&2; exit 1; }
 fi
+[[ ! -s "$CARGO_TEST_LOG" ]] || { echo "missing-artifact install unexpectedly invoked Cargo" >&2; exit 1; }
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 

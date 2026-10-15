@@ -1,7 +1,7 @@
 # Template file for 'velotype'
 pkgname=velotype
 version=0.7.5
-revision=1
+revision=2
 _commit=a61c71955c6104fc5d647088b5957da6d59149ca
 wrksrc="${pkgname}-${_commit}"
 build_style=cargo
@@ -418,37 +418,26 @@ do_build() {
 	fi
 }
 
-# Void's cargo build style runs cargo install --offline here, which may compile
-# dependencies again. Keep the musl patch active for that entire command too.
+# Reuse the auditable release binary from do_build. Cargo install compiles the
+# dependency graph again in a separate target directory, needlessly repeating
+# release LTO and disk I/O on low-memory devices.
 do_install() {
-	: ${make_cmd:=cargo auditable}
-	: ${make_install_args:=--path .}
-	: ${make_verbose:=-v}
+	local binary destination
+	binary="${wrksrc}/target/${RUST_TARGET}/release/velotype"
+	destination="${DESTDIR}/usr/bin/velotype"
 
-	_velotype_set_build_env
-	_velotype_xattr_src=
-	_velotype_xattr_backup=
-	_velotype_apply_xattr_patch || return $?
-
-	if ${make_cmd} install ${XBPS_VERBOSE+${make_verbose}} --target "${RUST_TARGET}" --root="${DESTDIR}/usr" \
-		--offline --locked ${configure_args} ${make_install_args}; then
-		if _velotype_restore_xattr_patch; then
-			trap - EXIT
-		else
-			return 1
-		fi
-	else
-		install_status=$?
-		if _velotype_restore_xattr_patch; then
-			trap - EXIT
-		else
-			return 1
-		fi
-		return "$install_status"
+	if [ ! -x "$binary" ]; then
+		echo "velotype: expected built executable not found: $binary" >&2
+		return 1
 	fi
-
-	rm -f "${DESTDIR}/usr/.crates.toml"
-	rm -f "${DESTDIR}/usr/.crates2.json"
+	if ! mkdir -p "${DESTDIR}/usr/bin"; then
+		echo "velotype: could not create package binary directory" >&2
+		return 1
+	fi
+	if ! install -m 0755 "$binary" "$destination"; then
+		echo "velotype: failed to install the prebuilt executable" >&2
+		return 1
+	fi
 }
 
 post_install() {
