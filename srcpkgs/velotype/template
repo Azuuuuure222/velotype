@@ -40,7 +40,7 @@ post_patch() {
 	default_count="$(grep -Fc "$default_gpui" "$manifest" || true)"
 	wayland_count="$(grep -Fc "$wayland_gpui" "$manifest" || true)"
 	if [ "$default_count" -eq 1 ] && [ "$wayland_count" -eq 0 ]; then
-		if ! sed -i 's|^gpui = { version = "0.2", features = \\["runtime_shaders"\\] }$|gpui = { version = "0.2", default-features = false, features = ["font-kit", "runtime_shaders", "wayland"] }|' "$manifest"; then
+		if ! sed -i 's|^gpui = .*runtime_shaders.*$|gpui = { version = "0.2", default-features = false, features = ["font-kit", "runtime_shaders", "wayland"] }|' "$manifest"; then
 			echo "velotype: could not set GPUI to Wayland-only features" >&2
 			return 1
 		fi
@@ -441,7 +441,7 @@ post_install() {
 		echo "velotype: readelf is required to validate Wayland-only linkage" >&2
 		return 1
 	fi
-	if readelf -d "$binary" | grep -Eq '\\(NEEDED\\).*Shared library: \\[(libX11|libxcb|libXrandr|libXi|libXcursor|libXdamage|libXfixes|libXrender|libXext|libXinerama|libXxf86vm|libxkbcommon-x11)\\.so'; then
+	if readelf -d "$binary" | grep -Eq 'Shared library: \[(libX11|libxcb|libXrandr|libXi|libXcursor|libXdamage|libXfixes|libXrender|libXext|libXinerama|libXxf86vm|libxkbcommon-x11)\.so'; then
 		echo "velotype: executable still has a direct X11 shared-library dependency" >&2
 		return 1
 	fi
