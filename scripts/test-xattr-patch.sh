@@ -9,12 +9,35 @@ trap 'rm -rf -- "$tmp"' EXIT
 fake_bin="${tmp}/bin"
 cargo_home="${tmp}/cargo"
 wrksrc="${tmp}/work"
-mkdir -p "$fake_bin" "$cargo_home/registry/src/test-index/xattr-0.2.3/src/sys" "$wrksrc" "${tmp}/destdir/usr"
+mkdir -p "$fake_bin" "$cargo_home/registry/src/test-index/xattr-0.2.3/src/sys" "$cargo_home/registry/src/test-index/gpui-0.2.2" "$cargo_home/registry/cache/test-index" "$wrksrc" "${tmp}/destdir/usr"
+
+cat > "$wrksrc/Cargo.toml" <<'TOML'
+[dependencies]
+gpui = { version = "0.2", features = ["runtime_shaders"] }
+TOML
+cat > "$wrksrc/Cargo.lock" <<'LOCK'
+[[package]]
+name = "gpui"
+version = "0.2.2"
+LOCK
+
+gpui_manifest="$cargo_home/registry/src/test-index/gpui-0.2.2/Cargo.toml"
+cat > "$gpui_manifest" <<'TOML'
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies.xkbcommon]
+version = "0.8.0"
+features = [
+    "wayland",
+    "x11",
+]
+optional = true
+TOML
+cp "$gpui_manifest" "${tmp}/expected-gpui-Cargo.toml"
 
 cat > "${fake_bin}/cargo" <<'STUB'
 #!/usr/bin/env bash
 case "${1:-}:${2:-}" in
 	fetch:*) [ "${CARGO_TEST_MODE:-failure}" = fetch-failure ] && exit 73; exit 0 ;;
+	tree:*) cat "$CARGO_TEST_TREE"; exit 0 ;;
 	auditable:build|auditable:install)
 		case "${CFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${CXXFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
@@ -38,9 +61,19 @@ cp "$xattr_file" "${tmp}/expected-mod.rs"
 # Fake the immutable Cargo crate archive, used to recover a cache left patched
 # by an interrupted earlier build.
 archive_root="${tmp}/archive"
-mkdir -p "$archive_root/xattr-0.2.3/src/sys" "$cargo_home/registry/cache/test-index"
+mkdir -p "$archive_root/xattr-0.2.3/src/sys" "$archive_root/gpui-0.2.2"
 cp "${tmp}/expected-mod.rs" "$archive_root/xattr-0.2.3/src/sys/mod.rs"
+cp "${tmp}/expected-gpui-Cargo.toml" "$archive_root/gpui-0.2.2/Cargo.toml"
 tar -czf "$cargo_home/registry/cache/test-index/xattr-0.2.3.crate" -C "$archive_root" xattr-0.2.3
+tar -czf "$cargo_home/registry/cache/test-index/gpui-0.2.2.crate" -C "$archive_root" gpui-0.2.2
+
+cat > "${tmp}/cargo-tree.txt" <<'TREE'
+gpui v0.2.2
+├── gpui feature "font-kit"
+├── gpui feature "runtime_shaders"
+├── gpui feature "wayland"
+└── xkbcommon feature "wayland"
+TREE
 
 export PATH="${fake_bin}:${PATH}"
 export CARGO_HOME="$cargo_home"
@@ -55,15 +88,30 @@ export DESTDIR="${tmp}/destdir"
 export configure_args=
 export make_build_args=
 export make_install_args=
+export CARGO_TEST_TREE="${tmp}/cargo-tree.txt"
 # The template expects this path to be available as a shell variable.
 source "$template"
 # Sourcing the template sets wrksrc; point it at the isolated test workspace.
 wrksrc="$tmp/work"
+post_patch
+# post_patch is idempotent and should never re-enable GPUI defaults.
+post_patch
+grep -Fq 'default-features = false' "$wrksrc/Cargo.toml"
+grep -Fq '"wayland"' "$wrksrc/Cargo.toml"
+if grep -Fq 'gpui = { version = "0.2", features = ["runtime_shaders"] }' "$wrksrc/Cargo.toml"; then
+	echo "GPUI default features were not disabled" >&2
+	exit 1
+fi
 
 assert_original_source() {
 	if ! cmp -s "$xattr_file" "${tmp}/expected-mod.rs"; then
 		echo "xattr source was not restored after a Cargo phase" >&2
 		diff -u "${tmp}/expected-mod.rs" "$xattr_file" >&2 || true
+		exit 1
+	fi
+	if ! cmp -s "$gpui_manifest" "${tmp}/expected-gpui-Cargo.toml"; then
+		echo "GPUI registry manifest was not restored after a Cargo phase" >&2
+		diff -u "${tmp}/expected-gpui-Cargo.toml" "$gpui_manifest" >&2 || true
 		exit 1
 	fi
 }
@@ -84,6 +132,8 @@ export CARGO_TEST_MODE=failure
 # Exercise a clean patch/restore cycle, as used by a successful phase.
 _velotype_apply_xattr_patch
 grep -Fq '::libc::ENODATA' "$xattr_file"
+[[ "$(_velotype_gpui_x11_count "$gpui_manifest")" -eq 0 ]]
+[[ "$(_velotype_gpui_wayland_count "$gpui_manifest")" -ge 1 ]]
 if grep -Fq '::libc::ENOATTR' "$xattr_file"; then
 	echo "ENOATTR remained after applying the musl compatibility patch" >&2
 	exit 1
@@ -92,9 +142,11 @@ _velotype_restore_xattr_patch
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
-# Simulate an interrupted previous run leaving the shared registry patched.
+# Simulate an interrupted previous run leaving both registry files patched.
 sed -i 's/::libc::ENOATTR/::libc::ENODATA/' "$xattr_file"
+sed -i '/\.dependencies\.xkbcommon\]/,/optional = true/{ /"x11",/d; }' "$gpui_manifest"
 _velotype_apply_xattr_patch
+[[ "$(_velotype_gpui_x11_count "$gpui_manifest")" -eq 0 ]]
 grep -Fq '::libc::ENODATA' "$xattr_file"
 _velotype_restore_xattr_patch
 trap 'rm -rf -- "$tmp"' EXIT
