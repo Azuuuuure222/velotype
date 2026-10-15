@@ -10,7 +10,7 @@ The binary is optimized specifically for the Intel Core i3-6100U (Skylake): C/C+
 
 ## Latest release
 
-Every successful package build from `main` publishes or verifies the latest stable GitHub Release. The release includes the native `.xbps` package, `SHA256SUMS`, `SHA512SUMS`, and `BUILD-INFO.txt`.
+After a successful package build from `main`, Actions creates a package-versioned GitHub Release or verifies that an existing release contains identical package bytes before marking it **Latest**. Each release includes the native `.xbps` package, `SHA256SUMS`, `SHA512SUMS`, and `BUILD-INFO.txt`.
 
 Download assets from the [latest release](https://github.com/Azuuuuure222/velotype-musl/releases/latest), then verify them from the directory containing the downloaded files:
 
