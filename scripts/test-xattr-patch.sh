@@ -20,6 +20,7 @@ case "${1:-}:${2:-}" in
 		case "${CXXFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${RUSTFLAGS:-}" in *target-cpu=skylake*) ;; *) exit 99 ;; esac
 		[ "${CARGO_BUILD_JOBS:-}" = 2 ] || exit 99
+		[ "${CARGO_TEST_MODE:-failure}" = success ] && exit 0
 		[ "$2" = build ] && exit 71
 		exit 72
 		;;
@@ -71,8 +72,23 @@ _velotype_restore_xattr_patch
 trap 'rm -rf -- "$tmp"' EXIT
 assert_original_source
 
-# Exercise failure cleanup for both Cargo phases. The stub returns distinct
-# errors instead of compiling, so this regression test is fast and offline.
+# Exercise both success and failure cleanup without compiling the application.
+export CARGO_TEST_MODE=success
+if ! do_build; then
+	echo "mocked Cargo build unexpectedly failed" >&2
+	exit 1
+fi
+trap 'rm -rf -- "$tmp"' EXIT
+assert_original_source
+
+if ! do_install; then
+	echo "mocked Cargo install unexpectedly failed" >&2
+	exit 1
+fi
+trap 'rm -rf -- "$tmp"' EXIT
+assert_original_source
+
+export CARGO_TEST_MODE=failure
 if do_build; then
 	echo "expected the mocked Cargo build to fail" >&2
 	exit 1
