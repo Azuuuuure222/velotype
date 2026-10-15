@@ -32,9 +32,15 @@ esac
 _velotype_restore_xattr_patch() {
 	if [ -n "${_velotype_xattr_src:-}" ] && [ -n "${_velotype_xattr_backup:-}" ]; then
 		if [ -f "${_velotype_xattr_backup}/mod.rs" ]; then
-			cp -f "${_velotype_xattr_backup}/mod.rs" "${_velotype_xattr_src}/src/sys/mod.rs"
+			if ! cp -f "${_velotype_xattr_backup}/mod.rs" "${_velotype_xattr_src}/src/sys/mod.rs"; then
+				echo "velotype: failed to restore cached xattr source; backup retained at ${_velotype_xattr_backup}" >&2
+				return 1
+			fi
 		fi
-		rm -rf -- "${_velotype_xattr_backup}"
+		rm -rf -- "${_velotype_xattr_backup}" || {
+			echo "velotype: failed to remove xattr backup ${_velotype_xattr_backup}" >&2
+			return 1
+		}
 	fi
 	_velotype_xattr_src=
 	_velotype_xattr_backup=
@@ -161,12 +167,18 @@ do_build() {
 
 	if ${make_cmd} build ${XBPS_VERBOSE+${make_verbose}} --release --locked --target "${RUST_TARGET}" \
 		${configure_args} ${make_build_args}; then
-		_velotype_restore_xattr_patch
-		trap - EXIT
+		if _velotype_restore_xattr_patch; then
+			trap - EXIT
+		else
+			return 1
+		fi
 	else
 		build_status=$?
-		_velotype_restore_xattr_patch
-		trap - EXIT
+		if _velotype_restore_xattr_patch; then
+			trap - EXIT
+		else
+			return 1
+		fi
 		return "$build_status"
 	fi
 }
@@ -185,12 +197,18 @@ do_install() {
 
 	if ${make_cmd} install ${XBPS_VERBOSE+${make_verbose}} --target "${RUST_TARGET}" --root="${DESTDIR}/usr" \
 		--offline --locked ${configure_args} ${make_install_args}; then
-		_velotype_restore_xattr_patch
-		trap - EXIT
+		if _velotype_restore_xattr_patch; then
+			trap - EXIT
+		else
+			return 1
+		fi
 	else
 		install_status=$?
-		_velotype_restore_xattr_patch
-		trap - EXIT
+		if _velotype_restore_xattr_patch; then
+			trap - EXIT
+		else
+			return 1
+		fi
 		return "$install_status"
 	fi
 
