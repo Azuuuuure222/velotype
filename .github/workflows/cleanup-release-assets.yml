@@ -1,0 +1,44 @@
+name: Clean up legacy release sidecars
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cleanup-release-assets.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-sidecar-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Remove checksum and build-info assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Remove legacy sidecars from existing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t tags < <(gh release list --limit 1000 --json tagName --jq '.[].tagName')
+          sidecars=(SHA256SUMS SHA512SUMS BUILD-INFO.txt)
+
+          for tag in "${tags[@]}"; do
+            mapfile -t assets < <(gh release view "$tag" --json assets --jq '.assets[].name')
+            for sidecar in "${sidecars[@]}"; do
+              if printf '%s\n' "${assets[@]}" | grep -Fxq "$sidecar"; then
+                echo "Removing $sidecar from release $tag"
+                gh release delete-asset "$tag" "$sidecar" --yes
+              fi
+            done
+          done
+
+          echo "Legacy checksum and build-info assets removed; package assets were left untouched."
