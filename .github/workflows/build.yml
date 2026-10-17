@@ -97,6 +97,18 @@ jobs:
           restore-keys: |
             velotype-cargo-v1-
 
+      - name: Restore Rust compiler cache
+        id: sccache-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: void-packages/hostdir/cargo/sccache
+          key: velotype-sccache-v1-${{ hashFiles('void-packages/srcpkgs/rust/template', 'void-packages/srcpkgs/rust-sccache/template') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            velotype-sccache-v1-${{ hashFiles('void-packages/srcpkgs/rust/template', 'void-packages/srcpkgs/rust-sccache/template') }}-
+
+      - name: Ensure Rust compiler cache directory exists
+        run: mkdir -p void-packages/hostdir/cargo/sccache
+
       - name: Restore Void binary package cache
         id: xbps-cache
         uses: actions/cache/restore@v6
@@ -175,6 +187,13 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
+
+      - name: Save Rust compiler cache
+        if: always() && steps.sccache-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: void-packages/hostdir/cargo/sccache
+          key: velotype-sccache-v1-${{ hashFiles('void-packages/srcpkgs/rust/template', 'void-packages/srcpkgs/rust-sccache/template') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Save Cargo registry cache
         if: always() && steps.cargo-cache.outputs.cache-hit != 'true'

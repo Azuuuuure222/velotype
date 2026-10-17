@@ -64,6 +64,9 @@ case "${1:-}:${2:-}" in
 		case "${CXXFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${RUSTFLAGS:-}" in *target-cpu=skylake*) ;; *) exit 99 ;; esac
 		[ "${CARGO_PROFILE_RELEASE_OPT_LEVEL:-}" = 3 ] || exit 99
+		[ "${RUSTC_WRAPPER:-}" = sccache ] || exit 99
+		[ "${SCCACHE_DIR:-}" = "${CARGO_HOME}/sccache" ] || exit 99
+		[ "${SCCACHE_CACHE_SIZE:-}" = 2G ] || exit 99
 		[ "${CARGO_BUILD_JOBS:-}" = 6 ] || exit 99
 		[ "${CARGO_TEST_MODE:-failure}" = success ] && exit 0
 		[ "$2" = build ] && exit 71
@@ -124,6 +127,9 @@ _velotype_set_build_env
 	echo "release build is not using speed-focused Rust opt-level 3" >&2
 	exit 1
 }
+[[ "$RUSTC_WRAPPER" == sccache ]]
+[[ "$SCCACHE_DIR" == "$CARGO_HOME/sccache" ]]
+[[ "$SCCACHE_CACHE_SIZE" == 2G ]]
 [[ "$CARGO_BUILD_JOBS" -eq 6 ]]
 unset CARGO_BUILD_JOBS
 _velotype_set_build_env

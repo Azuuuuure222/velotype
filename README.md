@@ -54,6 +54,6 @@ Upstream's transitive `xattr 0.2.3` references `libc::ENOATTR`, which is unavail
 
 ## CI and reproducibility
 
-GitHub Actions builds the actual `.xbps` package through `xbps-src` and uploads it as a workflow artifact. CI caches the pinned source archive, Cargo registry and Void binary packages. The source cache key includes both the upstream commit and its expected SHA-256; source archives are validated against that checksum on every run, and the checksum is never silently regenerated. The workflow checks shell syntax and the musl patch lifecycle before bootstrapping Void and compiling the application.
+GitHub Actions builds the actual `.xbps` package through `xbps-src` and uploads it as a workflow artifact. CI caches the pinned source archive, Cargo registry and Void binary packages, plus cacheable Rust compiler results through `sccache`; the compiler cache is capped at 2 GiB and persisted between runs to reduce repeated compilation. The source cache key includes both the upstream commit and its expected SHA-256; source archives are validated against that checksum on every run, and the checksum is never silently regenerated. The workflow checks shell syntax and the musl patch lifecycle before bootstrapping Void and compiling the application.
 
 When updating Velotype, review the upstream source commit and archive checksum, then build with `./xbps-src -A x86_64-musl pkg velotype` before merging.
