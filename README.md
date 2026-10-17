@@ -20,17 +20,13 @@ Vulkan, Mesa, Wayland, xkbcommon, fontconfig and freetype dependencies are retai
 
 ## Latest release
 
-After a successful package build from `main`, Actions publishes a GitHub Release whose tag and title are the upstream version only (for example, `0.7.5`). The package asset retains the XBPS revision and architecture: `velotype-0.7.5_2.x86_64-musl.xbps`. Each release includes the native `.xbps` package, `SHA256SUMS`, `SHA512SUMS`, and `BUILD-INFO.txt`.
+Each successful package build from `main` publishes a GitHub Release whose tag and title are the upstream version only (for example, `0.7.5`). The release contains the native XBPS package as its only downloadable asset, using the version, package revision, and architecture in its filename: `velotype-0.7.5_2.x86_64-musl.xbps`.
 
-Download assets from the [latest release](https://github.com/Azuuuuure222/velotype/releases/latest), then verify them from the directory containing the downloaded files:
+Release notes document the source and packaging commits, target architecture, and CPU tuning. Checksum manifests and separate build-info files are not published as release assets. The package targets `x86_64-musl` and is optimized for Intel Skylake; it is not suitable for older x86_64 CPUs. When changing packaged output without an upstream version change, increment `revision` in `srcpkgs/velotype/template`. The workflow rejects changed bytes under the same version and revision and refuses revision downgrades.
 
-```sh
-sha256sum -c SHA256SUMS
-sha512sum -c SHA512SUMS
-```
+Download the package from the [latest release](https://github.com/Azuuuuure222/velotype/releases/latest).
 
-These are standalone package releases, not a signed, indexed XBPS repository. The package targets `x86_64-musl` and is optimized for Intel Skylake; it is not suitable for older x86_64 CPUs.
-The release tag is version-only; the asset name carries both the package version and revision. Rebuilding the same version/revision must produce identical package bytes or publishing fails. When packaging changes without an upstream version change, increment `revision` in `srcpkgs/velotype/template`; the workflow then updates that version's release to the higher revision and replaces its package/checksum assets. Existing pre-migration releases remain available under their original tags.
+These are standalone package releases, not a signed, indexed XBPS repository.
 
 ## Build locally
 

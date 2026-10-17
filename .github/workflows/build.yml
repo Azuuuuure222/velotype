@@ -163,7 +163,6 @@ jobs:
             exit 1
           fi
           cp "${packages[0]}" "$GITHUB_WORKSPACE/dist/"
-          sha256sum "$GITHUB_WORKSPACE"/dist/*.xbps
 
       - name: Upload xbps package
         uses: actions/upload-artifact@v7

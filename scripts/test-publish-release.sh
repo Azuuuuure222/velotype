@@ -96,29 +96,41 @@ make_package() {
   export REVISION="$revision"
 }
 publish() { bash "$repo_root/scripts/publish-release.sh" "$dist"; }
+assert_package_only() {
+  local count
+  count="$(find "$state/assets" -maxdepth 1 -type f | wc -l)"
+  [[ "$count" -eq 1 ]] || { echo "expected one release asset, found $count" >&2; find "$state/assets" -type f >&2; exit 1; }
+  [[ -s "$state/assets/$1" ]] || { echo "missing package asset $1" >&2; exit 1; }
+  for sidecar in SHA256SUMS SHA512SUMS BUILD-INFO.txt; do
+    [[ ! -e "$state/assets/$sidecar" ]] || { echo "unexpected release sidecar $sidecar" >&2; exit 1; }
+  done
+}
 
+# A new release has a version-only tag and the package as its sole asset.
 make_package 2 "stable package bytes revision 2"
 publish
 [[ -f "$state/release-exists" ]]
-[[ -s "$state/assets/velotype-0.7.5_2.x86_64-musl.xbps" ]]
-[[ -s "$state/assets/SHA256SUMS" && -s "$state/assets/SHA512SUMS" && -s "$state/assets/BUILD-INFO.txt" ]]
+assert_package_only "velotype-0.7.5_2.x86_64-musl.xbps"
 grep -Fq 'release create 0.7.5' "$log" || { echo "release tag was not version-only" >&2; exit 1; }
 if grep -Fq 'release create velotype-0.7.5_2' "$log"; then
   echo "release tag incorrectly included the XBPS revision" >&2
   exit 1
 fi
 
+# Older releases may have sidecars; the next reconciliation removes them.
+for sidecar in SHA256SUMS SHA512SUMS BUILD-INFO.txt; do printf 'legacy sidecar\n' > "$state/assets/$sidecar"; done
 publish
-grep -Fq 'release edit 0.7.5' "$log" || { echo "idempotent run did not edit the version release" >&2; exit 1; }
-[[ "$(find "$state/assets" -maxdepth 1 -type f | wc -l)" -eq 4 ]]
+assert_package_only "velotype-0.7.5_2.x86_64-musl.xbps"
+grep -Fq 'release edit 0.7.5' "$log" || { echo "idempotent run did not reconcile the release" >&2; exit 1; }
 
+# Higher revisions replace older packages with a single current asset.
 export RELEASE_COMMIT=2222222222222222222222222222222222222222
 make_package 3 "stable package bytes revision 3"
 publish
-[[ -s "$state/assets/velotype-0.7.5_3.x86_64-musl.xbps" ]]
+assert_package_only "velotype-0.7.5_3.x86_64-musl.xbps"
 [[ ! -e "$state/assets/velotype-0.7.5_2.x86_64-musl.xbps" ]]
-[[ "$(find "$state/assets" -maxdepth 1 -type f | wc -l)" -eq 4 ]]
 
+# Changed bytes without a revision bump must fail and preserve the published package.
 make_package 3 "different bytes without revision bump"
 if publish >"$tmp/reproducibility.log" 2>&1; then
   echo "release accepted different bytes for an existing revision" >&2
@@ -128,9 +140,9 @@ grep -Fq 'Package bytes changed without a version/revision change' "$tmp/reprodu
   cat "$tmp/reproducibility.log" >&2
   exit 1
 }
-[[ -s "$state/assets/velotype-0.7.5_3.x86_64-musl.xbps" ]]
 grep -Fq 'stable package bytes revision 3' "$state/assets/velotype-0.7.5_3.x86_64-musl.xbps"
 
+# Revision downgrades must fail without mutating the current asset.
 make_package 2 "rollback package bytes"
 if publish >"$tmp/downgrade.log" 2>&1; then
   echo "release accepted a lower package revision" >&2
@@ -140,5 +152,5 @@ grep -Fq 'Refusing revision downgrade' "$tmp/downgrade.log" || {
   cat "$tmp/downgrade.log" >&2
   exit 1
 }
-[[ -s "$state/assets/velotype-0.7.5_3.x86_64-musl.xbps" ]]
-echo "version-only tag and release revision tests passed"
+assert_package_only "velotype-0.7.5_3.x86_64-musl.xbps"
+echo "package-only versioned release tests passed"
