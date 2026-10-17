@@ -6,7 +6,7 @@ This package pins Velotype `0.7.5` to upstream commit `a61c71955c6104fc5d647088b
 
 ## Target hardware
 
-The binary is optimized specifically for the Intel Core i3-6100U (Skylake): C/C++ components use `-O2 -march=skylake`, and Rust uses `-C target-cpu=skylake`. It is not intended for pre-Skylake x86_64 CPUs.
+The binary is specialized for the Intel Core i3-6100U (Skylake): C/C++ components use `-O2 -march=skylake`, and Rust uses `-C target-cpu=skylake`. The package overrides upstream's size-focused Rust `opt-level = "s"` with `CARGO_PROFILE_RELEASE_OPT_LEVEL=3` for higher runtime optimization in parsing, text processing, and interactive UI paths. Full LTO, one codegen unit, `panic=abort`, and symbol stripping remain enabled. This is a speed-first build: build/link time and executable size may increase, so package size is reported by CI; no runtime speedup is claimed until benchmarked on the actual i3-6100U. It is not intended for pre-Skylake x86_64 CPUs.
 
 ## Build host vs. target device
 

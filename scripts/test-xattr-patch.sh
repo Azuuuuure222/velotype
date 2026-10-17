@@ -63,6 +63,7 @@ case "${1:-}:${2:-}" in
 		case "${CFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${CXXFLAGS:-}" in *-march=skylake*) ;; *) exit 99 ;; esac
 		case "${RUSTFLAGS:-}" in *target-cpu=skylake*) ;; *) exit 99 ;; esac
+		[ "${CARGO_PROFILE_RELEASE_OPT_LEVEL:-}" = 3 ] || exit 99
 		[ "${CARGO_BUILD_JOBS:-}" = 6 ] || exit 99
 		[ "${CARGO_TEST_MODE:-failure}" = success ] && exit 0
 		[ "$2" = build ] && exit 71
@@ -103,6 +104,7 @@ export RUST_TARGET=x86_64-unknown-linux-musl
 export CFLAGS=
 export CXXFLAGS=
 export RUSTFLAGS=
+unset CARGO_PROFILE_RELEASE_OPT_LEVEL
 export CARGO_BUILD_JOBS=6
 export DESTDIR="${tmp}/destdir"
 export configure_args=
@@ -118,6 +120,10 @@ source "$template"
 # reintroduce a target-device-based default job limit.
 export CARGO_BUILD_JOBS=6
 _velotype_set_build_env
+[[ "$CARGO_PROFILE_RELEASE_OPT_LEVEL" == 3 ]] || {
+	echo "release build is not using speed-focused Rust opt-level 3" >&2
+	exit 1
+}
 [[ "$CARGO_BUILD_JOBS" -eq 6 ]]
 unset CARGO_BUILD_JOBS
 _velotype_set_build_env

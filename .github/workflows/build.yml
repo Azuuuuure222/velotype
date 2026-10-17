@@ -163,6 +163,9 @@ jobs:
             exit 1
           fi
           cp "${packages[0]}" "$GITHUB_WORKSPACE/dist/"
+          package_path="$GITHUB_WORKSPACE/dist/$(basename "${packages[0]}")"
+          package_bytes="$(stat -c '%s' "$package_path")"
+          printf -- '- **Optimized package size:** %s bytes (%s)\n' "$package_bytes" "$(du -h "$package_path" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload xbps package
         uses: actions/upload-artifact@v7

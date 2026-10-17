@@ -1,7 +1,7 @@
 # Template file for 'velotype'
 pkgname=velotype
 version=0.7.5
-revision=2
+revision=3
 _commit=a61c71955c6104fc5d647088b5957da6d59149ca
 wrksrc="${pkgname}-${_commit}"
 build_style=cargo
@@ -386,6 +386,11 @@ _velotype_set_build_env() {
 		*" -C target-cpu=skylake") ;;
 		*) export RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=skylake" ;;
 	esac
+	# Favor CPU throughput in the interactive editor on the Skylake target.
+	# Upstream sets opt-level = "s"; Cargo's profile env override switches the
+	# Rust release build to opt-level 3 while retaining full LTO, one codegen
+	# unit, panic=abort, and symbol stripping from the pinned upstream profile.
+	export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
 	# Let Cargo select parallelism from the build runner's available CPU cores.
 }
 

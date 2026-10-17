@@ -37,6 +37,7 @@ Automated Void Linux package release for Velotype ${version} (XBPS revision ${re
 - **Package asset:** ${package_name}
 - **Target:** x86_64-musl
 - **CPU target:** Intel Skylake, including the Core i3-6100U; not intended for pre-Skylake CPUs.
+- **Rust optimization:** release opt-level 3, full LTO, one codegen unit; panic=abort and symbol stripping retained.
 - **Upstream source commit:** ${upstream_commit}
 - **Packaging commit:** ${release_commit}
 
